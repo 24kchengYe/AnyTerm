@@ -124,8 +124,18 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
     }
   }, []);
 
+  // Force reconnect (e.g., after login sets new token)
+  const reconnect = useCallback(() => {
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    reconnectAttempts.current = 0;
+    wsRef.current?.close();
+    // Small delay to let close complete
+    setTimeout(connect, 100);
+  }, [connect]);
+
   return {
     connected,
+    reconnect,
     createSession: useCallback((cwd?: string, cols?: number, rows?: number) => send({ type: 'create', cwd, cols, rows }), [send]),
     attachSession: useCallback((id: string) => send({ type: 'attach', id }), [send]),
     writeInput: useCallback((id: string, data: string) => send({ type: 'input', id, data }), [send]),

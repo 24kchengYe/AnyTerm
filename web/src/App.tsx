@@ -22,6 +22,7 @@ export default function App() {
   const [mobile, setMobile] = useState(isMobile());
   const [names, setNames] = useState<Record<string, string>>({});
   const [closeConfirm, setCloseConfirm] = useState<string | null>(null);
+  const [whisperAvailable, setWhisperAvailable] = useState(false);
   const attachedRef = useRef<Set<string>>(new Set());
 
   // Check auth on mount
@@ -33,45 +34,23 @@ export default function App() {
         else if (data.needsPassword) setAuthState('needsLogin');
         else setAuthState('ok');
       })
-      .catch(() => setAuthState('ok')); // If can't reach server, let WS handle it
+      .catch(() => setAuthState('ok'));
   }, []);
 
-  // Fetch server capabilities
-  const [whisperAvailable, setWhisperAvailable] = useState(false);
-  useEffect(() => {
-    if (authState !== 'ok') return;
-    fetch('/api/settings').then(r => r.json()).then(d => setWhisperAvailable(d.whisper)).catch(() => {});
-  }, [authState]);
-
-  // Voice handler: send to server for transcription, result becomes terminal input
-  const handleVoice = useCallback(async (audio: string, format: string) => {
-    // Use chat WS if available, otherwise simple fetch
-    try {
-      const res = await fetch('/api/voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio, format }),
-      });
-      const data = await res.json();
-      if (data.text && activeId) {
-        ws.writeInput(activeId, data.text + '\r');
-      }
-    } catch { /* ignore */ }
-  }, [activeId]);
-
-  if (authState === 'checking') {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1b26', color: '#565f89' }}>Loading...</div>;
-  }
-
-  if (authState === 'needsLogin') {
-    return <LoginPage onLogin={() => setAuthState('ok')} />;
-  }
-
+  // Resize detection
   useEffect(() => {
     const handler = () => setMobile(isMobile());
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
+  // Fetch server capabilities after auth
+  useEffect(() => {
+    if (authState !== 'ok') return;
+    fetch('/api/settings').then(r => r.json()).then(d => setWhisperAvailable(d.whisper)).catch(() => {});
+    // After login, force WS reconnect with new token
+    if (!ws.connected) ws.reconnect();
+  }, [authState]);
 
   const writeToTerminal = useCallback((id: string, data: string) => {
     const el = document.querySelector(`[data-session-id="${id}"]`) as HTMLDivElement | null;
@@ -80,17 +59,15 @@ export default function App() {
     }
   }, []);
 
+  // ALL hooks must be called unconditionally (React rules of hooks)
   const ws = useTerminalWS({
     onOutput: writeToTerminal,
     onScrollback: writeToTerminal,
-    onExit: (_id) => {},
+    onExit: () => {},
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
       if (newSessions.length > 0) {
-        setActiveId(prev => {
-          if (prev && newSessions.some(s => s.id === prev)) return prev;
-          return newSessions[0].id;
-        });
+        setActiveId(prev => (prev && newSessions.some(s => s.id === prev)) ? prev : newSessions[0].id);
       }
     },
     onCreated: (id) => {
@@ -114,12 +91,9 @@ export default function App() {
     if (!ws.connected) attachedRef.current.clear();
   }, [ws.connected, sessions]);
 
-  const handleCreate = useCallback(() => { ws.createSession(); }, [ws]);
+  const handleCreate = useCallback(() => ws.createSession(), [ws]);
 
-  // Close with confirmation
-  const handleCloseRequest = useCallback((id: string) => {
-    setCloseConfirm(id);
-  }, []);
+  const handleCloseRequest = useCallback((id: string) => setCloseConfirm(id), []);
 
   const handleCloseConfirm = useCallback(() => {
     if (!closeConfirm) return;
@@ -140,7 +114,6 @@ export default function App() {
   }, []);
 
   const handleExport = useCallback((id: string) => {
-    // Get scrollback from the terminal's xterm instance
     const el = document.querySelector(`[data-session-id="${id}"]`) as HTMLDivElement | null;
     if (el && (el as any).__getBuffer) {
       const text = (el as any).__getBuffer() as string;
@@ -152,33 +125,46 @@ export default function App() {
     if (activeId) ws.writeInput(activeId, data);
   }, [ws, activeId]);
 
+  const handleVoice = useCallback(async (audio: string, format: string) => {
+    try {
+      const res = await fetch('/api/voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio, format }),
+      });
+      const data = await res.json();
+      if (data.text && activeId) {
+        ws.writeInput(activeId, data.text + '\r');
+      }
+    } catch { /* ignore */ }
+  }, [activeId, ws]);
+
+  // Auto-create first terminal when connected and authenticated
   useEffect(() => {
-    if (ws.connected && sessions.length === 0) {
+    if (authState === 'ok' && ws.connected && sessions.length === 0) {
       const timer = setTimeout(() => ws.createSession(), 300);
       return () => clearTimeout(timer);
     }
-  }, [ws.connected, sessions.length]);
+  }, [authState, ws.connected, sessions.length]);
+
+  // --- RENDER ---
+
+  // Auth gate: show login or loading BEFORE terminal UI
+  if (authState === 'checking') {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1b26', color: '#565f89' }}>Loading...</div>;
+  }
+
+  if (authState === 'needsLogin') {
+    return <LoginPage onLogin={() => setAuthState('ok')} />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: '#1a1b26' }}>
       <TerminalTabs
-        sessions={sessions}
-        activeId={activeId}
-        connected={ws.connected}
-        mobile={mobile}
-        names={names}
-        onSelect={(id) => {
-          setActiveId(id);
-          if (!attachedRef.current.has(id)) {
-            ws.attachSession(id);
-            attachedRef.current.add(id);
-          }
-        }}
-        onCreate={handleCreate}
-        onClose={handleCloseRequest}
-        onRename={handleRename}
-        onExport={handleExport}
-        onSettings={() => setSettingsOpen(true)}
+        sessions={sessions} activeId={activeId} connected={ws.connected} mobile={mobile} names={names}
+        onSelect={(id) => { setActiveId(id); if (!attachedRef.current.has(id)) { ws.attachSession(id); attachedRef.current.add(id); } }}
+        onCreate={handleCreate} onClose={handleCloseRequest} onRename={handleRename}
+        onExport={handleExport} onSettings={() => setSettingsOpen(true)}
       />
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
@@ -189,11 +175,7 @@ export default function App() {
           </div>
         )}
         {sessions.map(s => (
-          <TerminalView
-            key={s.id}
-            sessionId={s.id}
-            isActive={s.id === activeId}
-            mobile={mobile}
+          <TerminalView key={s.id} sessionId={s.id} isActive={s.id === activeId} mobile={mobile}
             onInput={(data) => ws.writeInput(s.id, data)}
             onResize={(cols, rows) => ws.resizeTerminal(s.id, cols, rows)}
             onAck={(bytes) => ws.ackBytes(s.id, bytes)}
@@ -201,7 +183,9 @@ export default function App() {
         ))}
       </div>
 
-      {mobile && activeId && <MobileBar onSend={handleInput} whisperAvailable={whisperAvailable} onVoice={handleVoice} />}
+      {mobile && activeId && (
+        <MobileBar onSend={handleInput} whisperAvailable={whisperAvailable} onVoice={handleVoice} />
+      )}
 
       {chatExpanded && (
         <ChatPanel expanded={chatExpanded} onToggle={() => setChatExpanded(false)}
@@ -226,8 +210,6 @@ function downloadText(text: string, filename: string) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
+  a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
