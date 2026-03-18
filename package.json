@@ -2,7 +2,11 @@
   "name": "anyterm",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Remote terminal manager with AI chat — control your computer from any device",
+  "bin": {
+    "anyterm": "./bin/anyterm.mjs"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "cd server && npm run dev",
@@ -10,7 +14,7 @@
     "build": "npm run build:web && npm run build:server",
     "build:server": "cd server && npm run build",
     "build:web": "cd web && npm run build",
-    "start": "cd server && npm start",
+    "start": "node bin/anyterm.mjs",
     "install:all": "npm install && cd server && npm install && cd ../web && npm install"
   },
   "devDependencies": {

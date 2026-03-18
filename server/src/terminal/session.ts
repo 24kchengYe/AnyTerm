@@ -55,7 +55,8 @@ export class TerminalSession extends EventEmitter {
 
     const shell = getDefaultShell();
     this.shell = shell.name;
-    this.cwd = cwd || process.cwd();
+    // Default to user's home directory (like opening a new terminal window)
+    this.cwd = cwd || (process.env.HOME || process.env.USERPROFILE || process.cwd());
 
     this.ptyProcess = pty.spawn(shell.path, shell.args, {
       name: 'xterm-256color',

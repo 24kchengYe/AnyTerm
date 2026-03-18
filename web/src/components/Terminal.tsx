@@ -76,6 +76,26 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
 
+    // Intercept Ctrl+C (copy when selected) and Ctrl+V (paste from clipboard)
+    terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      const ctrlOrMeta = e.ctrlKey || e.metaKey;
+      // Ctrl+C: if text selected, copy to clipboard instead of sending SIGINT
+      if (ctrlOrMeta && e.key.toLowerCase() === 'c' && terminal.hasSelection()) {
+        const sel = terminal.getSelection();
+        if (sel) navigator.clipboard.writeText(sel).catch(() => {});
+        terminal.clearSelection();
+        return false; // Don't send to PTY
+      }
+      // Ctrl+V: let browser handle paste event
+      if (ctrlOrMeta && e.key.toLowerCase() === 'v') return false;
+      // Ctrl+A: select all - let browser handle
+      if (ctrlOrMeta && e.key.toLowerCase() === 'a') {
+        terminal.selectAll();
+        return false;
+      }
+      return true;
+    });
+
     terminal.open(containerRef.current);
     fitAddon.fit();
 

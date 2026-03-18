@@ -150,12 +150,15 @@ export default function App() {
 
       {mobile && activeId && <MobileBar onSend={handleInput} />}
 
-      <ChatPanel
-        expanded={chatExpanded}
-        onToggle={() => setChatExpanded(!chatExpanded)}
-        activeTerminalId={activeId}
-        terminalIds={sessions.map(s => s.id)}
-      />
+      {/* AI Chat — only shown if user wants it (click gear → toggle) */}
+      {chatExpanded && (
+        <ChatPanel
+          expanded={chatExpanded}
+          onToggle={() => setChatExpanded(false)}
+          activeTerminalId={activeId}
+          terminalIds={sessions.map(s => s.id)}
+        />
+      )}
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
