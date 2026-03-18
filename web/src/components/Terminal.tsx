@@ -133,23 +133,21 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     // Input handler
     const inputDisposable = terminal.onData(onInput);
 
-    // Resize handler
-    const throttledResize = (() => {
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      return () => {
-        if (timer) return;
-        timer = setTimeout(() => {
-          timer = null;
-          if (fitAddon && !disposed && containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            if (rect.width < 100 || rect.height < 50) return;
-            fitAddon.fit();
-            const dims = fitAddon.proposeDimensions();
-            if (dims) onResize(dims.cols, dims.rows);
-          }
-        }, 100);
-      };
-    })();
+    // Resize handler with cleanup-safe throttle
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const throttledResize = () => {
+      if (resizeTimer) return;
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null;
+        if (fitAddon && !disposed && containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          if (rect.width < 100 || rect.height < 50) return;
+          fitAddon.fit();
+          const dims = fitAddon.proposeDimensions();
+          if (dims) onResize(dims.cols, dims.rows);
+        }
+      }, 100);
+    };
 
     const resizeObserver = new ResizeObserver(throttledResize);
     resizeObserver.observe(containerRef.current);
@@ -175,9 +173,11 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       clearInterval(heartbeat);
       flushAck();
       if (ackTimer) clearTimeout(ackTimer);
+      if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       inputDisposable.dispose();
       el.removeEventListener('paste', handlePaste);
+      (el as any).__writeToTerminal = undefined;
       terminal.dispose();
       fitAddon.dispose();
       xtermRef.current = null;

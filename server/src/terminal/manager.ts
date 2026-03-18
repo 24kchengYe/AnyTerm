@@ -2,14 +2,16 @@
  * Terminal session manager — creates, tracks, and cleans up terminal sessions.
  */
 import { TerminalSession, TerminalSessionInfo } from './session.js';
-
-let nextId = 1;
+import { nanoid } from 'nanoid';
 
 export class TerminalManager {
   private sessions = new Map<string, TerminalSession>();
+  private counter = 0;
 
   create(cwd?: string, cols?: number, rows?: number): TerminalSession {
-    const id = String(nextId++);
+    // Short readable ID: sequential number + random suffix for uniqueness across restarts
+    this.counter++;
+    const id = `${this.counter}-${nanoid(4)}`;
     const session = new TerminalSession(id, cwd, cols, rows);
 
     session.on('exit', () => {

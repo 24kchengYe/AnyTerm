@@ -49,8 +49,9 @@ export class TerminalSession extends EventEmitter {
   constructor(id: string, cwd?: string, cols = 120, rows = 30) {
     super();
     this.id = id;
-    this.cols = cols;
-    this.rows = rows;
+    // Validate dimensions
+    this.cols = Math.max(20, Math.min(500, cols));
+    this.rows = Math.max(5, Math.min(200, rows));
 
     const shell = getDefaultShell();
     this.shell = shell.name;
@@ -154,8 +155,9 @@ export class TerminalSession extends EventEmitter {
 
   /** Get last N characters of scrollback — useful for AI context */
   getRecentOutput(maxChars = 8000): string {
-    if (this.scrollbackBuffer.length <= maxChars) return this.scrollbackBuffer;
-    return this.scrollbackBuffer.slice(-maxChars);
+    const safe = Math.max(0, Math.min(maxChars, MAX_SCROLLBACK_SIZE));
+    if (this.scrollbackBuffer.length <= safe) return this.scrollbackBuffer;
+    return this.scrollbackBuffer.slice(-safe);
   }
 
   write(data: string): void {

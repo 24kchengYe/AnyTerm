@@ -1,6 +1,9 @@
 /**
  * WebSocket handler for AI chat + voice input.
  *
+ * SECURITY: ALL AI-generated commands require user confirmation before execution.
+ * No command is auto-executed, regardless of AI's "dangerous" classification.
+ *
  * Protocol (JSON messages):
  *   Client → Server:
  *     { type: "message", text: string, targetTerminal?: string }
@@ -14,13 +17,23 @@
  *     { type: "transcription", text: string }
  *     { type: "thinking" }
  *     { type: "error",      message: string }
- *     { type: "ai_status",  available: boolean }
+ *     { type: "ai_status",  available: boolean, whisperAvailable: boolean }
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import type { IncomingMessage } from 'http';
 import { AIEngine } from '../ai/engine.js';
 import { TerminalManager } from '../terminal/manager.js';
-import { LocalWhisper, checkWhisperAvailable } from '../speech/whisper.js';
+import { LocalWhisper } from '../speech/whisper.js';
+
+// Rate limiting: max 30 messages per minute per client
+const RATE_LIMIT_WINDOW = 60_000;
+const RATE_LIMIT_MAX = 30;
+
+function safeSend(ws: WebSocket, data: Record<string, unknown>): void {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
 
 export function setupChatWS(
   wss: WebSocketServer,
@@ -31,151 +44,152 @@ export function setupChatWS(
   wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
     console.log('[WS:Chat] Client connected');
 
+    // Rate limiting state
+    const messageTimestamps: number[] = [];
+
     // Send AI status
-    ws.send(JSON.stringify({
+    safeSend(ws, {
       type: 'ai_status',
       available: aiEngine.isAvailable(),
       whisperAvailable: whisper !== null,
-    }));
+    });
 
-    // Pending dangerous command
+    // Pending command awaiting confirmation (ALL commands go through this)
     let pendingCommand: { command: string; targetTerminal: string } | null = null;
 
     ws.on('message', async (raw: Buffer | string) => {
       try {
+        // Rate limiting check
+        const now = Date.now();
+        messageTimestamps.push(now);
+        while (messageTimestamps.length > 0 && messageTimestamps[0] < now - RATE_LIMIT_WINDOW) {
+          messageTimestamps.shift();
+        }
+        if (messageTimestamps.length > RATE_LIMIT_MAX) {
+          safeSend(ws, { type: 'error', message: 'Rate limit exceeded. Please slow down.' });
+          return;
+        }
+
         const msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString());
 
         switch (msg.type) {
           case 'message': {
-            // Tell client we're thinking
-            ws.send(JSON.stringify({ type: 'thinking' }));
+            if (typeof msg.text !== 'string' || !msg.text.trim()) {
+              safeSend(ws, { type: 'error', message: 'Empty message' });
+              break;
+            }
+
+            safeSend(ws, { type: 'thinking' });
 
             const result = await aiEngine.process(msg.text, msg.targetTerminal);
 
             if (result.type === 'error') {
-              ws.send(JSON.stringify({ type: 'error', message: result.text }));
+              safeSend(ws, { type: 'error', message: result.text });
               break;
             }
 
-            if (result.command && result.dangerous) {
-              // Store pending and ask for confirmation
+            if (result.command) {
+              // ALL commands require confirmation — store as pending
               pendingCommand = {
                 command: result.command,
                 targetTerminal: result.targetTerminal || '',
               };
-              ws.send(JSON.stringify({
+              safeSend(ws, {
                 type: 'reply',
                 text: result.text,
                 command: result.command,
-                dangerous: true,
+                dangerous: result.dangerous || false,
                 targetTerminal: result.targetTerminal,
-              }));
-            } else if (result.command) {
-              // Safe command — execute immediately
-              const termId = result.targetTerminal;
-              if (termId) {
-                const session = terminalManager.get(termId);
-                if (session) {
-                  session.write(result.command + '\r');
-                  ws.send(JSON.stringify({
-                    type: 'executing',
-                    command: result.command,
-                    targetTerminal: termId,
-                  }));
-                }
-              }
-              ws.send(JSON.stringify({
-                type: 'reply',
-                text: result.text,
-                command: result.command,
-                dangerous: false,
-                targetTerminal: result.targetTerminal,
-              }));
+              });
             } else {
-              // Just explanation
-              ws.send(JSON.stringify({
-                type: 'reply',
-                text: result.text,
-              }));
+              // Just explanation, no command
+              safeSend(ws, { type: 'reply', text: result.text });
             }
             break;
           }
 
           case 'confirm': {
-            if (pendingCommand) {
-              const { command, targetTerminal } = pendingCommand;
-              const session = terminalManager.get(targetTerminal);
-              if (session) {
-                session.write(command + '\r');
-                ws.send(JSON.stringify({
-                  type: 'executing',
-                  command,
-                  targetTerminal,
-                }));
-              }
-              pendingCommand = null;
+            if (!pendingCommand) {
+              safeSend(ws, { type: 'error', message: 'No pending command to confirm.' });
+              break;
+            }
+            const { command, targetTerminal } = pendingCommand;
+            pendingCommand = null;
+
+            const session = terminalManager.get(targetTerminal);
+            if (session && session.isAlive()) {
+              session.write(command + '\r');
+              console.log(`[AI:Audit] Executed in T${targetTerminal}: ${command}`);
+              safeSend(ws, { type: 'executing', command, targetTerminal });
+            } else {
+              safeSend(ws, { type: 'error', message: `Terminal ${targetTerminal} not found or dead.` });
             }
             break;
           }
 
           case 'reject': {
+            const rejected = pendingCommand;
             pendingCommand = null;
-            ws.send(JSON.stringify({ type: 'reply', text: 'Command cancelled.' }));
+            if (rejected) {
+              console.log(`[AI:Audit] Rejected: ${rejected.command}`);
+            }
+            safeSend(ws, { type: 'reply', text: 'Command cancelled.' });
             break;
           }
 
           case 'voice': {
             if (!whisper) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                message: 'Voice input not available. Configure whisper model path.',
-              }));
+              safeSend(ws, { type: 'error', message: 'Voice not available. Set ANYTERM_WHISPER_MODEL.' });
+              break;
+            }
+            if (typeof msg.audio !== 'string' || !msg.audio) {
+              safeSend(ws, { type: 'error', message: 'Invalid audio data.' });
               break;
             }
 
             try {
-              ws.send(JSON.stringify({ type: 'thinking' }));
+              safeSend(ws, { type: 'thinking' });
               const audioBuffer = Buffer.from(msg.audio, 'base64');
               const result = await whisper.transcribe(audioBuffer, msg.format || 'webm');
 
-              ws.send(JSON.stringify({ type: 'transcription', text: result.text }));
+              safeSend(ws, { type: 'transcription', text: result.text });
 
-              // Auto-process transcribed text through AI
+              // Process through AI, but NEVER auto-execute
               if (result.text) {
                 const aiResult = await aiEngine.process(result.text, msg.targetTerminal);
-                if (aiResult.command && !aiResult.dangerous) {
-                  const termId = aiResult.targetTerminal;
-                  if (termId) {
-                    const session = terminalManager.get(termId);
-                    if (session) session.write(aiResult.command + '\r');
-                  }
+                if (aiResult.command) {
+                  pendingCommand = {
+                    command: aiResult.command,
+                    targetTerminal: aiResult.targetTerminal || '',
+                  };
                 }
-                ws.send(JSON.stringify({
+                safeSend(ws, {
                   type: 'reply',
                   text: aiResult.text,
                   command: aiResult.command,
                   dangerous: aiResult.dangerous,
                   targetTerminal: aiResult.targetTerminal,
-                }));
+                });
               }
-            } catch (err: any) {
-              ws.send(JSON.stringify({
-                type: 'error',
-                message: `Voice transcription failed: ${err.message}`,
-              }));
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : 'Unknown error';
+              safeSend(ws, { type: 'error', message: `Voice transcription failed: ${message}` });
             }
             break;
           }
 
           default:
-            console.warn(`[WS:Chat] Unknown message type: ${msg.type}`);
+            // Ignore unknown message types silently
+            break;
         }
       } catch (err) {
-        console.error('[WS:Chat] Failed to parse message:', err);
+        console.error('[WS:Chat] Message handling error:', err);
+        safeSend(ws, { type: 'error', message: 'Internal server error.' });
       }
     });
 
     ws.on('close', () => {
+      pendingCommand = null;
       console.log('[WS:Chat] Client disconnected');
     });
   });

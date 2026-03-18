@@ -47,10 +47,20 @@ export class LocalWhisper {
       const text = await this.runWhisper(wavFile);
       return { text: text.trim(), language: this.language || undefined };
     } finally {
-      // Cleanup
-      try { await unlink(inputFile); } catch { /* */ }
-      try { await unlink(wavFile); } catch { /* */ }
-      try { const { rmdir } = await import('fs/promises'); await rmdir(tmpDir); } catch { /* */ }
+      // Cleanup temp files — log failures for debugging
+      for (const f of [inputFile, wavFile]) {
+        try { await unlink(f); } catch (e: any) {
+          if (e.code !== 'ENOENT') console.warn(`[Whisper] Failed to clean up ${f}: ${e.message}`);
+        }
+      }
+      try {
+        const { rmdir } = await import('fs/promises');
+        await rmdir(tmpDir);
+      } catch (e: any) {
+        if (e.code !== 'ENOENT' && e.code !== 'ENOTEMPTY') {
+          console.warn(`[Whisper] Failed to clean up tmpdir: ${e.message}`);
+        }
+      }
     }
   }
 

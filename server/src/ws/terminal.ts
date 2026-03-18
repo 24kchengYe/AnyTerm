@@ -1,42 +1,33 @@
 /**
  * WebSocket handler for terminal I/O.
- *
- * Protocol (JSON messages):
- *   Client → Server:
- *     { type: "input",  id: string, data: string }
- *     { type: "resize", id: string, cols: number, rows: number }
- *     { type: "ack",    id: string, bytes: number }
- *
- *   Server → Client:
- *     { type: "output", id: string, data: string }
- *     { type: "exit",   id: string, exitCode: number }
- *     { type: "sessions", sessions: TerminalSessionInfo[] }
+ * Includes proper cleanup, input validation, and error boundaries.
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import type { IncomingMessage } from 'http';
 import { TerminalManager } from '../terminal/manager.js';
 import type { TerminalSession } from '../terminal/session.js';
 
+function safeSend(ws: WebSocket, data: Record<string, unknown>): void {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
 export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager): void {
   wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
     console.log('[WS:Terminal] Client connected');
 
-    // Track which sessions this client is subscribed to
     const subscriptions = new Map<string, { onOutput: (e: any) => void; onExit: (e: any) => void }>();
 
     const subscribe = (session: TerminalSession) => {
       if (subscriptions.has(session.id)) return;
 
       const onOutput = (e: { id: string; data: string }) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'output', id: e.id, data: e.data }));
-        }
+        safeSend(ws, { type: 'output', id: e.id, data: e.data });
       };
       const onExit = (e: { id: string; exitCode: number }) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'exit', id: e.id, exitCode: e.exitCode }));
-        }
-        subscriptions.delete(session.id);
+        safeSend(ws, { type: 'exit', id: e.id, exitCode: e.exitCode });
+        unsubscribeById(e.id);
       };
 
       session.on('output', onOutput);
@@ -44,16 +35,19 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
       subscriptions.set(session.id, { onOutput, onExit });
     };
 
-    const unsubscribe = (session: TerminalSession) => {
-      const handlers = subscriptions.get(session.id);
+    const unsubscribeById = (id: string) => {
+      const handlers = subscriptions.get(id);
       if (!handlers) return;
-      session.off('output', handlers.onOutput);
-      session.off('exit', handlers.onExit);
-      subscriptions.delete(session.id);
+      const session = manager.get(id);
+      if (session) {
+        session.off('output', handlers.onOutput);
+        session.off('exit', handlers.onExit);
+      }
+      subscriptions.delete(id);
     };
 
     // Send initial session list
-    sendSessions(ws, manager);
+    safeSend(ws, { type: 'sessions', sessions: manager.list() });
 
     ws.on('message', (raw: Buffer | string) => {
       try {
@@ -63,85 +57,82 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
           case 'create': {
             const session = manager.create(msg.cwd, msg.cols, msg.rows);
             subscribe(session);
-            // Send scrollback for new session (empty, but consistent)
-            sendSessions(ws, manager);
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'created', id: session.id }));
-            }
+            safeSend(ws, { type: 'sessions', sessions: manager.list() });
+            safeSend(ws, { type: 'created', id: session.id });
             break;
           }
 
           case 'attach': {
+            if (typeof msg.id !== 'string') break;
+            // Prevent duplicate subscriptions
+            if (subscriptions.has(msg.id)) break;
             const session = manager.get(msg.id);
             if (!session) {
-              ws.send(JSON.stringify({ type: 'error', message: `Session ${msg.id} not found` }));
+              safeSend(ws, { type: 'error', message: `Session ${msg.id} not found` });
               break;
             }
             subscribe(session);
-            // Send scrollback for reconnection
             const scrollback = session.getScrollback();
-            if (scrollback && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'scrollback', id: msg.id, data: scrollback }));
+            if (scrollback) {
+              safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
             }
             break;
           }
 
           case 'input': {
+            if (typeof msg.id !== 'string' || typeof msg.data !== 'string') break;
             const session = manager.get(msg.id);
             if (session) session.write(msg.data);
             break;
           }
 
           case 'resize': {
+            if (typeof msg.id !== 'string') break;
+            const cols = typeof msg.cols === 'number' ? msg.cols : 0;
+            const rows = typeof msg.rows === 'number' ? msg.rows : 0;
+            if (cols < 10 || rows < 3 || cols > 500 || rows > 200) break;
             const session = manager.get(msg.id);
-            if (session) session.resize(msg.cols, msg.rows);
+            if (session) session.resize(cols, rows);
             break;
           }
 
           case 'ack': {
+            if (typeof msg.id !== 'string') break;
+            const bytes = typeof msg.bytes === 'number' ? Math.max(0, msg.bytes) : 0;
+            if (bytes === 0) break;
             const session = manager.get(msg.id);
-            if (session) session.ack(msg.bytes);
+            if (session) session.ack(bytes);
             break;
           }
 
           case 'destroy': {
-            const session = manager.get(msg.id);
-            if (session) unsubscribe(session);
+            if (typeof msg.id !== 'string') break;
+            unsubscribeById(msg.id);
             manager.destroy(msg.id);
-            sendSessions(ws, manager);
+            safeSend(ws, { type: 'sessions', sessions: manager.list() });
             break;
           }
 
           case 'list': {
-            sendSessions(ws, manager);
+            safeSend(ws, { type: 'sessions', sessions: manager.list() });
             break;
           }
-
-          default:
-            console.warn(`[WS:Terminal] Unknown message type: ${msg.type}`);
         }
       } catch (err) {
-        console.error('[WS:Terminal] Failed to parse message:', err);
+        console.error('[WS:Terminal] Message handling error:', err);
       }
     });
 
     ws.on('close', () => {
-      // Unsubscribe from all sessions (but don't kill them!)
-      for (const [id, handlers] of subscriptions) {
-        const session = manager.get(id);
-        if (session) {
-          session.off('output', handlers.onOutput);
-          session.off('exit', handlers.onExit);
-        }
+      // Unsubscribe from all sessions (sessions stay alive)
+      for (const [id] of subscriptions) {
+        unsubscribeById(id);
       }
-      subscriptions.clear();
       console.log('[WS:Terminal] Client disconnected');
     });
-  });
-}
 
-function sendSessions(ws: WebSocket, manager: TerminalManager): void {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'sessions', sessions: manager.list() }));
-  }
+    ws.on('error', (err) => {
+      console.error('[WS:Terminal] Socket error:', err.message);
+    });
+  });
 }

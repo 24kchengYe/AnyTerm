@@ -48,6 +48,8 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onVoiceData, disabled 
       setRecording(true);
     } catch (err) {
       console.error('Failed to start recording:', err);
+      setRecording(false);
+      setProcessing(false);
     }
   }, [onVoiceData]);
 

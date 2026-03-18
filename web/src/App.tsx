@@ -18,8 +18,9 @@ export default function App() {
   const [chatExpanded, setChatExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
+  // Track which sessions are already attached to avoid duplicate subscriptions
+  const attachedRef = useRef<Set<string>>(new Set());
 
-  // Detect mobile on resize
   useEffect(() => {
     const handler = () => setMobile(isMobile());
     window.addEventListener('resize', handler);
@@ -36,39 +37,54 @@ export default function App() {
   const ws = useTerminalWS({
     onOutput: writeToTerminal,
     onScrollback: writeToTerminal,
-    onExit: (id) => {
-      console.log(`Terminal ${id} exited`);
-    },
+    onExit: (_id) => { /* Terminal shows as dead in session list */ },
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
-      if (!activeId && newSessions.length > 0) {
-        setActiveId(newSessions[0].id);
+      // Auto-select first session if none active
+      if (newSessions.length > 0) {
+        setActiveId(prev => {
+          if (prev && newSessions.some(s => s.id === prev)) return prev;
+          return newSessions[0].id;
+        });
       }
     },
     onCreated: (id) => {
       setActiveId(id);
-      ws.attachSession(id);
+      // Attach to new session (prevent duplicate)
+      if (!attachedRef.current.has(id)) {
+        ws.attachSession(id);
+        attachedRef.current.add(id);
+      }
     },
   });
 
-  // On connect, attach to existing sessions
+  // On connect, attach to existing sessions (once per session)
   useEffect(() => {
     if (ws.connected && sessions.length > 0) {
       for (const s of sessions) {
-        ws.attachSession(s.id);
+        if (!attachedRef.current.has(s.id)) {
+          ws.attachSession(s.id);
+          attachedRef.current.add(s.id);
+        }
       }
     }
-  }, [ws.connected]);
+    // Reset attached set on disconnect
+    if (!ws.connected) {
+      attachedRef.current.clear();
+    }
+  }, [ws.connected, sessions]);
 
   const handleCreate = useCallback(() => { ws.createSession(); }, [ws]);
 
   const handleClose = useCallback((id: string) => {
     ws.destroySession(id);
-    if (activeId === id) {
+    attachedRef.current.delete(id);
+    setActiveId(prev => {
+      if (prev !== id) return prev;
       const remaining = sessions.filter(s => s.id !== id);
-      setActiveId(remaining.length > 0 ? remaining[0].id : null);
-    }
-  }, [ws, activeId, sessions]);
+      return remaining.length > 0 ? remaining[0].id : null;
+    });
+  }, [ws, sessions]);
 
   const handleInput = useCallback((data: string) => {
     if (activeId) ws.writeInput(activeId, data);
@@ -77,12 +93,10 @@ export default function App() {
   // Auto-create first terminal
   useEffect(() => {
     if (ws.connected && sessions.length === 0) {
-      const timer = setTimeout(() => {
-        if (sessions.length === 0) ws.createSession();
-      }, 300);
+      const timer = setTimeout(() => ws.createSession(), 300);
       return () => clearTimeout(timer);
     }
-  }, [ws.connected]);
+  }, [ws.connected, sessions.length]);
 
   return (
     <div style={{
@@ -93,28 +107,27 @@ export default function App() {
       overflow: 'hidden',
       background: '#1a1b26',
     }}>
-      {/* Tab bar */}
       <TerminalTabs
         sessions={sessions}
         activeId={activeId}
         connected={ws.connected}
-        onSelect={(id) => { setActiveId(id); ws.attachSession(id); }}
+        onSelect={(id) => {
+          setActiveId(id);
+          if (!attachedRef.current.has(id)) {
+            ws.attachSession(id);
+            attachedRef.current.add(id);
+          }
+        }}
         onCreate={handleCreate}
         onClose={handleClose}
         onSettings={() => setSettingsOpen(true)}
       />
 
-      {/* Terminal area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {sessions.length === 0 && (
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            gap: 16,
-            color: '#565f89',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', height: '100%', gap: 16, color: '#565f89',
           }}>
             <div style={{ fontSize: 48 }}>{'>'}_</div>
             <div style={{ fontSize: 14 }}>
@@ -135,12 +148,8 @@ export default function App() {
         ))}
       </div>
 
-      {/* Mobile shortcut bar */}
-      {mobile && activeId && (
-        <MobileBar onSend={handleInput} />
-      )}
+      {mobile && activeId && <MobileBar onSend={handleInput} />}
 
-      {/* AI Chat panel */}
       <ChatPanel
         expanded={chatExpanded}
         onToggle={() => setChatExpanded(!chatExpanded)}
@@ -148,10 +157,7 @@ export default function App() {
         terminalIds={sessions.map(s => s.id)}
       />
 
-      {/* Settings overlay */}
-      {settingsOpen && (
-        <SettingsPanel onClose={() => setSettingsOpen(false)} />
-      )}
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
