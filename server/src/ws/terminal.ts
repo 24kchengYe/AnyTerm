@@ -33,6 +33,16 @@ function updateSessionSize(sessionId: string, manager: TerminalManager): void {
   }
 }
 
+// Broadcast session list to ALL connected clients
+function broadcastSessions(wss: WebSocketServer, manager: TerminalManager): void {
+  const msg = JSON.stringify({ type: 'sessions', sessions: manager.list() });
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(msg);
+    }
+  }
+}
+
 export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager): void {
   wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
     console.log('[WS:Terminal] Client connected');
@@ -84,7 +94,7 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
           case 'create': {
             const session = manager.create(msg.cwd, msg.cols, msg.rows);
             subscribe(session);
-            safeSend(ws, { type: 'sessions', sessions: manager.list() });
+            broadcastSessions(wss, manager);
             safeSend(ws, { type: 'created', id: session.id });
             break;
           }
@@ -144,7 +154,7 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             unsubscribeById(msg.id);
             manager.destroy(msg.id);
             clientViewports.delete(msg.id);
-            safeSend(ws, { type: 'sessions', sessions: manager.list() });
+            broadcastSessions(wss, manager); // Notify ALL clients
             break;
           }
 

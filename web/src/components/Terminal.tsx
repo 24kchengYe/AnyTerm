@@ -1,15 +1,19 @@
 /**
  * Terminal component — xterm.js wrapper with WebGL, FitAddon, flow control ack.
- * Adapted from Zync's TerminalPanel.tsx.
+ *
+ * MOBILE STRATEGY (MidTerm approach):
+ * - PTY size is controlled ONLY by desktop clients
+ * - Mobile does NOT send resize — it CSS-scales the terminal to fit the screen
+ * - This means mobile sees exactly the same content as desktop, just smaller
  */
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-const ACK_BATCH_SIZE = 10_000;   // 10KB
-const ACK_BATCH_INTERVAL = 100;  // ms
-const ACK_HEARTBEAT = 500;       // ms
+const ACK_BATCH_SIZE = 10_000;
+const ACK_BATCH_INTERVAL = 100;
+const ACK_HEARTBEAT = 500;
 
 interface TerminalProps {
   sessionId: string;
@@ -21,13 +25,9 @@ interface TerminalProps {
 }
 
 export const TerminalView: React.FC<TerminalProps> = React.memo(({
-  sessionId,
-  isActive,
-  mobile,
-  onInput,
-  onResize,
-  onAck,
+  sessionId, isActive, mobile, onInput, onResize, onAck,
 }) => {
+  const outerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -38,7 +38,6 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     return localStorage.getItem('anyterm_mobile_hint_dismissed') !== '1';
   });
 
-  // Keep isActiveRef in sync
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
 
   // Initialize terminal
@@ -47,66 +46,45 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     let disposed = false;
     const terminal = new XTerm({
-      fontSize: 13, // Same size on all devices — mobile users can pinch-zoom or rotate
+      fontSize: 13,
       fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
-        background: '#1a1b26',
-        foreground: '#c0caf5',
-        cursor: '#c0caf5',
-        cursorAccent: '#1a1b26',
+        background: '#1a1b26', foreground: '#c0caf5', cursor: '#c0caf5', cursorAccent: '#1a1b26',
         selectionBackground: '#33467c',
-        black: '#15161e',
-        red: '#f7768e',
-        green: '#9ece6a',
-        yellow: '#e0af68',
-        blue: '#7aa2f7',
-        magenta: '#bb9af7',
-        cyan: '#7dcfff',
-        white: '#a9b1d6',
-        brightBlack: '#414868',
-        brightRed: '#f7768e',
-        brightGreen: '#9ece6a',
-        brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7',
-        brightMagenta: '#bb9af7',
-        brightCyan: '#7dcfff',
-        brightWhite: '#c0caf5',
+        black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68',
+        blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6',
+        brightBlack: '#414868', brightRed: '#f7768e', brightGreen: '#9ece6a', brightYellow: '#e0af68',
+        brightBlue: '#7aa2f7', brightMagenta: '#bb9af7', brightCyan: '#7dcfff', brightWhite: '#c0caf5',
       },
       scrollback: 5000,
       cursorBlink: true,
       cursorStyle: 'bar',
       allowTransparency: false,
-      fastScrollModifier: 'ctrl',
     });
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
 
-    // Intercept Ctrl+C (copy when selected) and Ctrl+V (paste from clipboard)
+    // Keyboard shortcuts
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       const ctrlOrMeta = e.ctrlKey || e.metaKey;
-      // Ctrl+C: if text selected, copy to clipboard instead of sending SIGINT
       if (ctrlOrMeta && e.key.toLowerCase() === 'c' && terminal.hasSelection()) {
         const sel = terminal.getSelection();
         if (sel) navigator.clipboard.writeText(sel).catch(() => {});
         terminal.clearSelection();
-        return false; // Don't send to PTY
-      }
-      // Ctrl+V: let browser handle paste event
-      if (ctrlOrMeta && e.key.toLowerCase() === 'v') return false;
-      // Ctrl+A: select all - let browser handle
-      if (ctrlOrMeta && e.key.toLowerCase() === 'a') {
-        terminal.selectAll();
         return false;
       }
+      if (ctrlOrMeta && e.key.toLowerCase() === 'v') return false;
+      if (ctrlOrMeta && e.key.toLowerCase() === 'a') { terminal.selectAll(); return false; }
       return true;
     });
 
     terminal.open(containerRef.current);
 
-    // Fit after DOM has fully laid out — use rAF chain to ensure correct size
+    // Desktop: fit terminal to container and resize PTY
+    // Mobile: do NOT fit/resize — CSS scaling handles it
     const doFit = () => {
-      if (disposed || !containerRef.current) return;
+      if (disposed || !containerRef.current || mobile) return;
       const rect = containerRef.current.getBoundingClientRect();
       if (rect.width > 100 && rect.height > 50) {
         fitAddon.fit();
@@ -114,35 +92,28 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
         if (dims) onResize(dims.cols, dims.rows);
       }
     };
-    // Fit immediately, then again after layout settles
-    requestAnimationFrame(() => {
-      doFit();
+
+    if (!mobile) {
       requestAnimationFrame(() => {
         doFit();
-        // One more after a short delay for slow renders
-        setTimeout(doFit, 200);
+        requestAnimationFrame(() => { doFit(); setTimeout(doFit, 200); });
       });
-    });
+    }
 
-    // Try WebGL addon
+    // WebGL + WebLinks addons
     (async () => {
       try {
         const { WebglAddon } = await import('@xterm/addon-webgl');
         if (!disposed) {
           const addon = new WebglAddon();
-          addon.onContextLoss(() => {
-            try { addon.dispose(); } catch { /* */ }
-          });
+          addon.onContextLoss(() => { try { addon.dispose(); } catch {} });
           terminal.loadAddon(addon);
         }
-      } catch { /* DOM renderer fallback */ }
-
+      } catch {}
       try {
         const { WebLinksAddon } = await import('@xterm/addon-web-links');
-        if (!disposed) {
-          terminal.loadAddon(new WebLinksAddon());
-        }
-      } catch { /* ignore */ }
+        if (!disposed) terminal.loadAddon(new WebLinksAddon());
+      } catch {}
     })();
 
     xtermRef.current = terminal;
@@ -151,7 +122,6 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     // Ack batching
     let pendingAckBytes = 0;
     let ackTimer: ReturnType<typeof setTimeout> | null = null;
-
     const flushAck = () => {
       if (ackTimer) { clearTimeout(ackTimer); ackTimer = null; }
       if (pendingAckBytes > 0) {
@@ -160,22 +130,16 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
         onAck(bytes);
       }
     };
-
     const heartbeat = setInterval(flushAck, ACK_HEARTBEAT);
 
-    // Expose write method via data attribute for parent to call
     const el = containerRef.current;
     (el as any).__writeToTerminal = (data: string) => {
       pendingAckBytes += data.length;
-      if (pendingAckBytes >= ACK_BATCH_SIZE) {
-        flushAck();
-      } else if (!ackTimer) {
-        ackTimer = setTimeout(flushAck, ACK_BATCH_INTERVAL);
-      }
+      if (pendingAckBytes >= ACK_BATCH_SIZE) flushAck();
+      else if (!ackTimer) ackTimer = setTimeout(flushAck, ACK_BATCH_INTERVAL);
       terminal.write(data);
     };
 
-    // Expose buffer extraction for export
     (el as any).__getBuffer = (): string => {
       const buf = terminal.buffer.active;
       const lines: string[] = [];
@@ -186,37 +150,26 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       return lines.join('\n');
     };
 
-    // Input handler
     const inputDisposable = terminal.onData(onInput);
 
-    // Resize handler with cleanup-safe throttle
+    // Resize observer — desktop only
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const throttledResize = () => {
-      if (resizeTimer) return;
+      if (resizeTimer || mobile) return;
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
-        if (fitAddon && !disposed && containerRef.current) {
-          const rect = containerRef.current.getBoundingClientRect();
-          if (rect.width < 100 || rect.height < 50) return;
-          fitAddon.fit();
-          const dims = fitAddon.proposeDimensions();
-          if (dims) onResize(dims.cols, dims.rows);
-        }
+        doFit();
       }, 100);
     };
-
     const resizeObserver = new ResizeObserver(throttledResize);
-    resizeObserver.observe(containerRef.current);
+    if (!mobile) resizeObserver.observe(containerRef.current);
 
-    // Paste handler (clipboard access can throw in restricted contexts)
+    // Paste handler
     const handlePaste = (e: ClipboardEvent) => {
       try {
         const text = e.clipboardData?.getData('text');
-        if (text && terminal && !disposed) {
-          e.preventDefault();
-          terminal.paste(text);
-        }
-      } catch { /* clipboard access denied */ }
+        if (text && terminal && !disposed) { e.preventDefault(); terminal.paste(text); }
+      } catch {}
     };
     el.addEventListener('paste', handlePaste);
 
@@ -232,16 +185,17 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       inputDisposable.dispose();
       el.removeEventListener('paste', handlePaste);
       (el as any).__writeToTerminal = undefined;
+      (el as any).__getBuffer = undefined;
       terminal.dispose();
       fitAddon.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [sessionId]); // Re-create terminal when session changes
+  }, [sessionId]);
 
-  // Re-fit when becoming active
+  // Re-fit on becoming active (desktop only)
   useEffect(() => {
-    if (isActive && fitAddonRef.current && xtermRef.current) {
+    if (isActive && !mobile && fitAddonRef.current && xtermRef.current) {
       requestAnimationFrame(() => {
         fitAddonRef.current?.fit();
         xtermRef.current?.focus();
@@ -249,7 +203,40 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
         if (dims) onResize(dims.cols, dims.rows);
       });
     }
-  }, [isActive, onResize]);
+  }, [isActive, mobile, onResize]);
+
+  // Mobile CSS scaling: measure terminal actual size vs container, apply transform
+  useEffect(() => {
+    if (!mobile || !isActive || !containerRef.current || !outerRef.current) return;
+
+    const applyScale = () => {
+      const outer = outerRef.current;
+      const inner = containerRef.current;
+      if (!outer || !inner) return;
+
+      const outerW = outer.clientWidth;
+      const innerW = inner.scrollWidth;
+      if (innerW > outerW && innerW > 0) {
+        const scale = outerW / innerW;
+        inner.style.transform = `scale(${scale})`;
+        inner.style.transformOrigin = 'top left';
+        inner.style.width = `${innerW}px`;
+        inner.style.height = `${inner.scrollHeight}px`;
+        outer.style.overflow = 'hidden';
+      } else {
+        inner.style.transform = '';
+        inner.style.transformOrigin = '';
+        inner.style.width = '100%';
+        inner.style.height = '100%';
+      }
+    };
+
+    // Apply after terminal renders
+    const timer = setTimeout(applyScale, 300);
+    const interval = setInterval(applyScale, 2000); // Re-check periodically
+
+    return () => { clearTimeout(timer); clearInterval(interval); };
+  }, [mobile, isActive, ready]);
 
   const dismissHint = useCallback(() => {
     setShowMobileHint(false);
@@ -258,45 +245,23 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
   return (
     <div style={{
-      width: '100%',
-      height: '100%',
+      width: '100%', height: '100%',
       display: isActive ? 'flex' : 'none',
       flexDirection: 'column',
     }}>
       {showMobileHint && (
         <div style={{
-          background: '#1f2335',
-          borderBottom: '1px solid #292d3e',
-          padding: '6px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: 12,
-          color: '#7aa2f7',
-          flexShrink: 0,
+          background: '#1f2335', borderBottom: '1px solid #292d3e',
+          padding: '6px 12px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', fontSize: 12, color: '#7aa2f7', flexShrink: 0,
         }}>
-          <span>Mobile view — use input bar below to type commands</span>
-          <button
-            onClick={dismissHint}
-            style={{
-              background: 'none', border: 'none', color: '#565f89',
-              cursor: 'pointer', padding: '0 4px', fontSize: 14,
-            }}
-            aria-label="Dismiss hint"
-          >
-            ×
-          </button>
+          <span>Mobile view — use input bar below. Rotate for wider view.</span>
+          <button onClick={dismissHint} style={{ background: 'none', border: 'none', color: '#565f89', cursor: 'pointer', padding: '0 4px', fontSize: 14 }} aria-label="Dismiss">×</button>
         </div>
       )}
-      <div
-        ref={containerRef}
-        data-session-id={sessionId}
-        style={{
-          width: '100%',
-          flex: 1,
-          minHeight: 0,
-        }}
-      />
+      <div ref={outerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        <div ref={containerRef} data-session-id={sessionId} style={{ width: '100%', height: '100%' }} />
+      </div>
     </div>
   );
 });
