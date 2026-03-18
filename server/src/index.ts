@@ -142,8 +142,10 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
-  // Auth check (skip in dev for convenience)
-  if (!DEV && !validateRequest(req)) {
+  // Auth check — only enforce if ANYTERM_AUTH=true is explicitly set
+  // Local usage (anyterm command) doesn't need auth
+  const authEnabled = process.env.ANYTERM_AUTH === 'true';
+  if (authEnabled && !validateRequest(req)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;
