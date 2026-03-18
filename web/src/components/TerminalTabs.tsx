@@ -31,6 +31,28 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleTabKeyDown = useCallback((e: React.KeyboardEvent, currentId: string) => {
+    const idx = sessions.findIndex(s => s.id === currentId);
+    if (idx === -1) return;
+    let nextIdx = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      nextIdx = (idx + 1) % sessions.length;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      nextIdx = (idx - 1 + sessions.length) % sessions.length;
+    }
+    if (nextIdx >= 0) {
+      e.preventDefault();
+      onSelect(sessions[nextIdx].id);
+      // Focus the next tab element
+      const container = tabsContainerRef.current;
+      if (container) {
+        const tabs = container.querySelectorAll<HTMLElement>('[role="tab"]');
+        tabs[nextIdx]?.focus();
+      }
+    }
+  }, [sessions, onSelect]);
 
   const getTabName = (s: TerminalSessionInfo) => names[s.id] || `Terminal ${s.id.split('-')[0]}`;
 
@@ -61,7 +83,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
 
   return (
     <>
-      <div style={{
+      <div ref={tabsContainerRef} role="tablist" style={{
         display: 'flex', alignItems: 'center', height: h,
         background: '#13141c', borderBottom: '1px solid #292d3e',
         padding: '0 4px', gap: mobile ? 4 : 2,
@@ -76,6 +98,10 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
         {sessions.map(s => (
           <div
             key={s.id}
+            role="tab"
+            aria-selected={s.id === activeId}
+            tabIndex={s.id === activeId ? 0 : -1}
+            onKeyDown={(e) => handleTabKeyDown(e, s.id)}
             onClick={() => { if (editingId !== s.id) { onSelect(s.id); setMenuId(null); } }}
             onDoubleClick={() => startEdit(s.id)}
             onContextMenu={(e) => { e.preventDefault(); showMenu(s.id, e.clientX, e.clientY); }}

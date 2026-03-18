@@ -33,6 +33,10 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const isActiveRef = useRef(isActive);
   const [ready, setReady] = useState(false);
+  const [showMobileHint, setShowMobileHint] = useState(() => {
+    if (!mobile) return false;
+    return localStorage.getItem('anyterm_mobile_hint_dismissed') !== '1';
+  });
 
   // Keep isActiveRef in sync
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
@@ -43,7 +47,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     let disposed = false;
     const terminal = new XTerm({
-      fontSize: mobile ? 10 : 13,
+      fontSize: 13, // Same size on all devices — mobile users can pinch-zoom or rotate
       fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
         background: '#1a1b26',
@@ -247,16 +251,53 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     }
   }, [isActive, onResize]);
 
+  const dismissHint = useCallback(() => {
+    setShowMobileHint(false);
+    localStorage.setItem('anyterm_mobile_hint_dismissed', '1');
+  }, []);
+
   return (
-    <div
-      ref={containerRef}
-      data-session-id={sessionId}
-      style={{
-        width: '100%',
-        height: '100%',
-        display: isActive ? 'block' : 'none',
-      }}
-    />
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: isActive ? 'flex' : 'none',
+      flexDirection: 'column',
+    }}>
+      {showMobileHint && (
+        <div style={{
+          background: '#1f2335',
+          borderBottom: '1px solid #292d3e',
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: 12,
+          color: '#7aa2f7',
+          flexShrink: 0,
+        }}>
+          <span>Mobile view — use input bar below to type commands</span>
+          <button
+            onClick={dismissHint}
+            style={{
+              background: 'none', border: 'none', color: '#565f89',
+              cursor: 'pointer', padding: '0 4px', fontSize: 14,
+            }}
+            aria-label="Dismiss hint"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        data-session-id={sessionId}
+        style={{
+          width: '100%',
+          flex: 1,
+          minHeight: 0,
+        }}
+      />
+    </div>
   );
 });
 

@@ -1,14 +1,12 @@
 /**
- * Mobile input bar — replaces tiny on-screen keyboard with a proper command input,
- * quick shortcut buttons, and voice input. Terminal output is still fully visible above.
+ * Mobile input bar — replaces tiny on-screen keyboard with a proper command input
+ * and quick shortcut buttons. Voice input delegates to the phone's voice keyboard.
  */
 import React, { useState, useCallback, useRef } from 'react';
-import { Send, ChevronUp, ChevronDown, Mic, MicOff } from 'lucide-react';
+import { Send, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface MobileBarProps {
   onSend: (data: string) => void;
-  whisperAvailable?: boolean;
-  onVoice?: (audio: string, format: string) => void;
 }
 
 const SHORTCUTS = [
@@ -24,46 +22,13 @@ const SHORTCUTS = [
   { label: '\u2192', data: '\x1b[C' },
 ];
 
-export const MobileBar: React.FC<MobileBarProps> = ({ onSend, whisperAvailable, onVoice }) => {
+export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
   const [input, setInput] = useState('');
   const [showShortcuts, setShowShortcuts] = useState(true);
-  const [recording, setRecording] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-
-  const toggleRecording = useCallback(async () => {
-    if (recording) {
-      // Stop
-      mediaRecorderRef.current?.stop();
-      setRecording(false);
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm',
-      });
-      chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const buf = await blob.arrayBuffer();
-        const b64 = btoa(new Uint8Array(buf).reduce((d, b) => d + String.fromCharCode(b), ''));
-        onVoice?.(b64, 'webm');
-        stream.getTracks().forEach(t => t.stop());
-      };
-      mediaRecorderRef.current = mr;
-      mr.start();
-      setRecording(true);
-    } catch {
-      setRecording(false);
-    }
-  }, [recording, onVoice]);
 
   const handleSubmit = useCallback(() => {
     if (!input.trim()) return;
-    // Send as typed command + Enter
     onSend(input + '\r');
     setInput('');
     inputRef.current?.focus();
@@ -152,28 +117,6 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend, whisperAvailable, 
           }}
         />
 
-        {/* Voice button */}
-        {whisperAvailable && onVoice && (
-          <button
-            onClick={toggleRecording}
-            style={{
-              background: recording ? '#f7768e' : '#292d3e',
-              border: 'none',
-              borderRadius: 8,
-              padding: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              color: recording ? '#1a1b26' : '#a9b1d6',
-              minHeight: 42,
-              flexShrink: 0,
-              cursor: 'pointer',
-              animation: recording ? 'pulse 1.5s infinite' : 'none',
-            }}
-          >
-            {recording ? <MicOff size={18} /> : <Mic size={18} />}
-          </button>
-        )}
-
         {/* Send button */}
         <button
           onClick={handleSubmit}
@@ -193,8 +136,16 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend, whisperAvailable, 
         >
           <Send size={18} />
         </button>
+      </div>
 
-        <style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.6 } }`}</style>
+      {/* Voice keyboard hint */}
+      <div style={{
+        textAlign: 'center',
+        padding: '2px 8px 6px',
+        fontSize: 11,
+        color: '#565f89',
+      }}>
+        Tip: Use your phone's voice keyboard 🎤
       </div>
     </div>
   );

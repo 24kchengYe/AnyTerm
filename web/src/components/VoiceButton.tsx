@@ -1,8 +1,9 @@
 /**
  * Voice input button — records audio via MediaRecorder and sends as base64.
  */
-import React, { useState, useRef, useCallback } from 'react';
+import React from 'react';
 import { Mic, MicOff, Loader } from 'lucide-react';
+import { useMediaRecorder } from '../hooks/useMediaRecorder.js';
 
 interface VoiceButtonProps {
   onVoiceData: (audio: string, format: string) => void;
@@ -10,67 +11,12 @@ interface VoiceButtonProps {
 }
 
 export const VoiceButton: React.FC<VoiceButtonProps> = ({ onVoiceData, disabled }) => {
-  const [recording, setRecording] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-
-  const startRecording = useCallback(async () => {
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm',
-      });
-
-      chunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        setProcessing(true);
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const buffer = await blob.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-        onVoiceData(base64, 'webm');
-        setProcessing(false);
-        stream.getTracks().forEach(t => t.stop());
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      setRecording(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Microphone access denied';
-      setError(msg);
-      setRecording(false);
-      setProcessing(false);
-      // Auto-clear error after 3s
-      setTimeout(() => setError(null), 3000);
-    }
-  }, [onVoiceData]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-    }
-  }, []);
-
-  const handleClick = useCallback(() => {
-    if (recording) stopRecording(); else startRecording();
-  }, [recording, startRecording, stopRecording]);
+  const { recording, processing, error, toggleRecording } = useMediaRecorder({ onRecorded: onVoiceData });
 
   return (
     <div style={{ position: 'relative' }}>
       <button
-        onClick={handleClick}
+        onClick={toggleRecording}
         disabled={disabled || processing}
         title={error || (recording ? 'Stop recording' : 'Start voice input')}
         aria-label={recording ? 'Stop recording' : 'Start voice input'}

@@ -9,6 +9,7 @@ import { MobileBar } from './components/MobileBar.js';
 import { SettingsPanel } from './components/Settings.js';
 import { ConfirmDialog } from './components/ConfirmDialog.js';
 import { LoginPage } from './components/LoginPage.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { useTerminalWS, type TerminalSessionInfo } from './hooks/useTerminalWS.js';
 
 const isMobile = () => window.innerWidth < 768;
@@ -23,6 +24,7 @@ export default function App() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [closeConfirm, setCloseConfirm] = useState<string | null>(null);
   const [whisperAvailable, setWhisperAvailable] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const attachedRef = useRef<Set<string>>(new Set());
 
   // Check auth on mount
@@ -113,13 +115,19 @@ export default function App() {
     setNames(prev => ({ ...prev, [id]: newName }));
   }, []);
 
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  }, []);
+
   const handleExport = useCallback((id: string) => {
     const el = document.querySelector(`[data-session-id="${id}"]`) as HTMLDivElement | null;
     if (el && (el as any).__getBuffer) {
       const text = (el as any).__getBuffer() as string;
       downloadText(text, `terminal-${names[id] || id}.txt`);
+      showToast('Exported!');
     }
-  }, [names]);
+  }, [names, showToast]);
 
   const handleInput = useCallback((data: string) => {
     if (activeId) ws.writeInput(activeId, data);
@@ -175,16 +183,18 @@ export default function App() {
           </div>
         )}
         {sessions.map(s => (
-          <TerminalView key={s.id} sessionId={s.id} isActive={s.id === activeId} mobile={mobile}
-            onInput={(data) => ws.writeInput(s.id, data)}
-            onResize={(cols, rows) => ws.resizeTerminal(s.id, cols, rows)}
-            onAck={(bytes) => ws.ackBytes(s.id, bytes)}
-          />
+          <ErrorBoundary key={s.id}>
+            <TerminalView sessionId={s.id} isActive={s.id === activeId} mobile={mobile}
+              onInput={(data) => ws.writeInput(s.id, data)}
+              onResize={(cols, rows) => ws.resizeTerminal(s.id, cols, rows)}
+              onAck={(bytes) => ws.ackBytes(s.id, bytes)}
+            />
+          </ErrorBoundary>
         ))}
       </div>
 
       {mobile && activeId && (
-        <MobileBar onSend={handleInput} whisperAvailable={whisperAvailable} onVoice={handleVoice} />
+        <MobileBar onSend={handleInput} />
       )}
 
       {chatExpanded && (
@@ -201,6 +211,27 @@ export default function App() {
           onConfirm={handleCloseConfirm}
           onCancel={() => setCloseConfirm(null)}
         />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: mobile ? 120 : 60,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#9ece6a',
+          color: '#1a1b26',
+          padding: '8px 20px',
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          zIndex: 3000,
+          pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        }}>
+          {toast}
+        </div>
       )}
     </div>
   );
