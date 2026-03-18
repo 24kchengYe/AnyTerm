@@ -98,7 +98,8 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
               break;
             }
             subscribe(session);
-            const scrollback = session.getScrollback();
+            // Send only recent output (last 50KB) to avoid flooding on reconnect
+            const scrollback = session.getRecentOutput(50000);
             if (scrollback) {
               safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
             }

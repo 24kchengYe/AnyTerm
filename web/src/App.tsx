@@ -68,6 +68,13 @@ export default function App() {
     onExit: () => {},
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
+      // Auto-attach any new sessions (e.g., created from another device)
+      for (const s of newSessions) {
+        if (!attachedRef.current.has(s.id)) {
+          ws.attachSession(s.id);
+          attachedRef.current.add(s.id);
+        }
+      }
       if (newSessions.length > 0) {
         setActiveId(prev => (prev && newSessions.some(s => s.id === prev)) ? prev : newSessions[0].id);
       }
