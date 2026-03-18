@@ -1,12 +1,13 @@
 /**
  * AnyTerm — main application component.
- * Manages terminal sessions, WebSocket connection, and layout.
+ * Manages terminal sessions, WebSocket connection, layout, and settings.
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { TerminalTabs } from './components/TerminalTabs.js';
 import { TerminalView } from './components/Terminal.js';
 import { ChatPanel } from './components/ChatPanel.js';
 import { MobileBar } from './components/MobileBar.js';
+import { SettingsPanel } from './components/Settings.js';
 import { useTerminalWS, type TerminalSessionInfo } from './hooks/useTerminalWS.js';
 
 const isMobile = () => window.innerWidth < 768;
@@ -15,10 +16,8 @@ export default function App() {
   const [sessions, setSessions] = useState<TerminalSessionInfo[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
-
-  // Track terminal containers for writing output
-  const containerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Detect mobile on resize
   useEffect(() => {
@@ -28,7 +27,6 @@ export default function App() {
   }, []);
 
   const writeToTerminal = useCallback((id: string, data: string) => {
-    // Find the terminal container and write data
     const el = document.querySelector(`[data-session-id="${id}"]`) as HTMLDivElement | null;
     if (el && (el as any).__writeToTerminal) {
       (el as any).__writeToTerminal(data);
@@ -40,34 +38,29 @@ export default function App() {
     onScrollback: writeToTerminal,
     onExit: (id) => {
       console.log(`Terminal ${id} exited`);
-      // Don't remove from list — let user see it's dead
     },
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
-      // Auto-select first session if none active
       if (!activeId && newSessions.length > 0) {
         setActiveId(newSessions[0].id);
       }
     },
     onCreated: (id) => {
       setActiveId(id);
-      // Attach to receive output
       ws.attachSession(id);
     },
   });
 
-  // On initial connect, attach to all existing sessions
+  // On connect, attach to existing sessions
   useEffect(() => {
     if (ws.connected && sessions.length > 0) {
       for (const s of sessions) {
         ws.attachSession(s.id);
       }
     }
-  }, [ws.connected]); // Only on connect, not on every session change
+  }, [ws.connected]);
 
-  const handleCreate = useCallback(() => {
-    ws.createSession();
-  }, [ws]);
+  const handleCreate = useCallback(() => { ws.createSession(); }, [ws]);
 
   const handleClose = useCallback((id: string) => {
     ws.destroySession(id);
@@ -81,18 +74,9 @@ export default function App() {
     if (activeId) ws.writeInput(activeId, data);
   }, [ws, activeId]);
 
-  const handleResize = useCallback((cols: number, rows: number) => {
-    if (activeId) ws.resizeTerminal(activeId, cols, rows);
-  }, [ws, activeId]);
-
-  const handleAck = useCallback((bytes: number) => {
-    if (activeId) ws.ackBytes(activeId, bytes);
-  }, [ws, activeId]);
-
-  // Auto-create first terminal on connect if none exist
+  // Auto-create first terminal
   useEffect(() => {
     if (ws.connected && sessions.length === 0) {
-      // Small delay to let WS handshake settle
       const timer = setTimeout(() => {
         if (sessions.length === 0) ws.createSession();
       }, 300);
@@ -114,12 +98,10 @@ export default function App() {
         sessions={sessions}
         activeId={activeId}
         connected={ws.connected}
-        onSelect={(id) => {
-          setActiveId(id);
-          ws.attachSession(id);
-        }}
+        onSelect={(id) => { setActiveId(id); ws.attachSession(id); }}
         onCreate={handleCreate}
         onClose={handleClose}
+        onSettings={() => setSettingsOpen(true)}
       />
 
       {/* Terminal area */}
@@ -162,7 +144,14 @@ export default function App() {
       <ChatPanel
         expanded={chatExpanded}
         onToggle={() => setChatExpanded(!chatExpanded)}
+        activeTerminalId={activeId}
+        terminalIds={sessions.map(s => s.id)}
       />
+
+      {/* Settings overlay */}
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} />
+      )}
     </div>
   );
 }

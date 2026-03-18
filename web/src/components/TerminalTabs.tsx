@@ -2,7 +2,7 @@
  * Terminal tab bar — create, switch, close terminal sessions.
  */
 import React from 'react';
-import { Plus, X, Terminal as TerminalIcon, Wifi, WifiOff } from 'lucide-react';
+import { Plus, X, Terminal as TerminalIcon, Wifi, WifiOff, Settings } from 'lucide-react';
 import type { TerminalSessionInfo } from '../hooks/useTerminalWS.js';
 
 interface TerminalTabsProps {
@@ -12,6 +12,7 @@ interface TerminalTabsProps {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onClose: (id: string) => void;
+  onSettings?: () => void;
 }
 
 export const TerminalTabs: React.FC<TerminalTabsProps> = ({
@@ -21,6 +22,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
   onSelect,
   onCreate,
   onClose,
+  onSettings,
 }) => {
   return (
     <div style={{
@@ -113,6 +115,29 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
       >
         <Plus size={13} />
       </button>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Settings button */}
+      {onSettings && (
+        <button
+          onClick={onSettings}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#565f89',
+            cursor: 'pointer',
+            padding: 4,
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+          title="Settings"
+        >
+          <Settings size={14} />
+        </button>
+      )}
     </div>
   );
 };

@@ -12,13 +12,14 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@lydell/node-pty": "^1.2.0-beta.3",
     "express": "^5.1.0",
-    "ws": "^8.18.0",
-    "nanoid": "^5.1.5"
+    "nanoid": "^5.1.5",
+    "undici": "^7.24.4",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
-    "@types/ws": "^8.18.1",
     "@types/node": "^22.15.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0"
   }
