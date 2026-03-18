@@ -41,8 +41,8 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     let disposed = false;
     const terminal = new XTerm({
-      fontSize: 14,
-      fontFamily: "'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
+      fontSize: 13,
+      fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
         background: '#1a1b26',
         foreground: '#c0caf5',
@@ -97,7 +97,26 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     });
 
     terminal.open(containerRef.current);
-    fitAddon.fit();
+
+    // Fit after DOM has fully laid out — use rAF chain to ensure correct size
+    const doFit = () => {
+      if (disposed || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width > 100 && rect.height > 50) {
+        fitAddon.fit();
+        const dims = fitAddon.proposeDimensions();
+        if (dims) onResize(dims.cols, dims.rows);
+      }
+    };
+    // Fit immediately, then again after layout settles
+    requestAnimationFrame(() => {
+      doFit();
+      requestAnimationFrame(() => {
+        doFit();
+        // One more after a short delay for slow renders
+        setTimeout(doFit, 200);
+      });
+    });
 
     // Try WebGL addon
     (async () => {
@@ -194,10 +213,6 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       } catch { /* clipboard access denied */ }
     };
     el.addEventListener('paste', handlePaste);
-
-    // Report initial size
-    const dims = fitAddon.proposeDimensions();
-    if (dims) onResize(dims.cols, dims.rows);
 
     setReady(true);
 
