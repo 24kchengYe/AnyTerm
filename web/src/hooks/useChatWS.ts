@@ -37,7 +37,9 @@ export function useChatWS(options: UseChatWSOptions) {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const ws = new WebSocket(`${protocol}//${host}/ws/chat`);
+    const token = localStorage.getItem('anyterm_token') || '';
+    const tokenParam = token ? `?token=${token}` : '';
+    const ws = new WebSocket(`${protocol}//${host}/ws/chat${tokenParam}`);
 
     ws.onopen = () => {
       connectingRef.current = false;

@@ -148,6 +148,7 @@ export default function App() {
             key={s.id}
             sessionId={s.id}
             isActive={s.id === activeId}
+            mobile={mobile}
             onInput={(data) => ws.writeInput(s.id, data)}
             onResize={(cols, rows) => ws.resizeTerminal(s.id, cols, rows)}
             onAck={(bytes) => ws.ackBytes(s.id, bytes)}

@@ -41,7 +41,10 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const ws = new WebSocket(`${protocol}//${host}/ws/terminal`);
+    // Append token for remote (non-localhost) connections
+    const token = localStorage.getItem('anyterm_token') || '';
+    const tokenParam = token ? `?token=${token}` : '';
+    const ws = new WebSocket(`${protocol}//${host}/ws/terminal${tokenParam}`);
 
     ws.onopen = () => {
       console.log('[WS] Connected to terminal server');

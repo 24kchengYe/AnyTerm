@@ -14,6 +14,7 @@ const ACK_HEARTBEAT = 500;       // ms
 interface TerminalProps {
   sessionId: string;
   isActive: boolean;
+  mobile: boolean;
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   onAck: (bytes: number) => void;
@@ -22,6 +23,7 @@ interface TerminalProps {
 export const TerminalView: React.FC<TerminalProps> = React.memo(({
   sessionId,
   isActive,
+  mobile,
   onInput,
   onResize,
   onAck,
@@ -41,7 +43,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     let disposed = false;
     const terminal = new XTerm({
-      fontSize: 13,
+      fontSize: mobile ? 10 : 13,
       fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
         background: '#1a1b26',

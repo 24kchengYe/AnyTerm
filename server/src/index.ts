@@ -142,10 +142,13 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
-  // Auth check — only enforce if ANYTERM_AUTH=true is explicitly set
-  // Local usage (anyterm command) doesn't need auth
-  const authEnabled = process.env.ANYTERM_AUTH === 'true';
-  if (authEnabled && !validateRequest(req)) {
+  // Auth: localhost connections are always allowed.
+  // Remote connections (from phone/other device) require token in URL: ?token=xxx
+  // Token is shown at startup and in the browser's Settings panel.
+  const remoteAddr = req.socket.remoteAddress || '';
+  const isLocalhost = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
+  if (!isLocalhost && !validateRequest(req)) {
+    console.log(`[Auth] Blocked remote WebSocket from ${remoteAddr} (no valid token)`);
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;

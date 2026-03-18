@@ -1,6 +1,6 @@
 /**
  * WebSocket handler for terminal I/O.
- * Includes proper cleanup, input validation, and error boundaries.
+ * Tracks per-client viewport size, uses the LARGEST connected viewport for PTY resize.
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import type { IncomingMessage } from 'http';
@@ -10,6 +10,26 @@ import type { TerminalSession } from '../terminal/session.js';
 function safeSend(ws: WebSocket, data: Record<string, unknown>): void {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(data));
+  }
+}
+
+// Track all clients' viewport sizes per session
+const clientViewports = new Map<string, Map<WebSocket, { cols: number; rows: number }>>();
+
+function updateSessionSize(sessionId: string, manager: TerminalManager): void {
+  const viewports = clientViewports.get(sessionId);
+  if (!viewports || viewports.size === 0) return;
+
+  // Use the LARGEST cols among all clients (so desktop isn't shrunk by phone)
+  let maxCols = 0;
+  let maxRows = 0;
+  for (const { cols, rows } of viewports.values()) {
+    if (cols > maxCols) { maxCols = cols; maxRows = rows; }
+  }
+
+  if (maxCols > 0 && maxRows > 0) {
+    const session = manager.get(sessionId);
+    if (session) session.resize(maxCols, maxRows);
   }
 }
 
@@ -44,9 +64,16 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
         session.off('exit', handlers.onExit);
       }
       subscriptions.delete(id);
+
+      // Remove this client's viewport for this session
+      const viewports = clientViewports.get(id);
+      if (viewports) {
+        viewports.delete(ws);
+        if (viewports.size === 0) clientViewports.delete(id);
+        else updateSessionSize(id, manager);
+      }
     };
 
-    // Send initial session list
     safeSend(ws, { type: 'sessions', sessions: manager.list() });
 
     ws.on('message', (raw: Buffer | string) => {
@@ -64,7 +91,6 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
 
           case 'attach': {
             if (typeof msg.id !== 'string') break;
-            // Prevent duplicate subscriptions
             if (subscriptions.has(msg.id)) break;
             const session = manager.get(msg.id);
             if (!session) {
@@ -90,9 +116,16 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             if (typeof msg.id !== 'string') break;
             const cols = typeof msg.cols === 'number' ? msg.cols : 0;
             const rows = typeof msg.rows === 'number' ? msg.rows : 0;
-            if (cols < 10 || rows < 3 || cols > 500 || rows > 200) break;
-            const session = manager.get(msg.id);
-            if (session) session.resize(cols, rows);
+            if (cols < 20 || rows < 5 || cols > 500 || rows > 200) break;
+
+            // Store this client's viewport size
+            if (!clientViewports.has(msg.id)) {
+              clientViewports.set(msg.id, new Map());
+            }
+            clientViewports.get(msg.id)!.set(ws, { cols, rows });
+
+            // Resize PTY to the largest connected viewport
+            updateSessionSize(msg.id, manager);
             break;
           }
 
@@ -109,6 +142,7 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             if (typeof msg.id !== 'string') break;
             unsubscribeById(msg.id);
             manager.destroy(msg.id);
+            clientViewports.delete(msg.id);
             safeSend(ws, { type: 'sessions', sessions: manager.list() });
             break;
           }
@@ -125,8 +159,14 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
     });
 
     ws.on('close', () => {
-      // Unsubscribe from all sessions (sessions stay alive)
+      // Remove this client's viewports and unsubscribe
       for (const [id] of subscriptions) {
+        const viewports = clientViewports.get(id);
+        if (viewports) {
+          viewports.delete(ws);
+          if (viewports.size === 0) clientViewports.delete(id);
+          else updateSessionSize(id, manager);
+        }
         unsubscribeById(id);
       }
       console.log('[WS:Terminal] Client disconnected');
