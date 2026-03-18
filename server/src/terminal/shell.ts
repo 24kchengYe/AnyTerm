@@ -22,19 +22,19 @@ export function getDefaultShell(): ShellInfo {
 }
 
 function detectWindowsShell(): ShellInfo {
-  // Git Bash first
+  // PowerShell Core (pwsh) first — modern, cross-platform
+  const pwsh = findExecutable('pwsh.exe');
+  if (pwsh) return { path: pwsh, name: 'pwsh', args: ['-NoExit', '-NoLogo'] };
+
+  // Windows PowerShell — like Windows Terminal default
+  const powershell = findExecutable('powershell.exe');
+  if (powershell) return { path: powershell, name: 'powershell', args: ['-NoExit', '-NoLogo'] };
+
+  // Git Bash fallback
   const gitBash = findGitBash();
   if (gitBash) return { path: gitBash, name: 'gitbash', args: ['-i'] };
 
-  // PowerShell Core
-  const pwsh = findExecutable('pwsh.exe');
-  if (pwsh) return { path: pwsh, name: 'pwsh', args: ['-NoExit'] };
-
-  // Windows PowerShell
-  const powershell = findExecutable('powershell.exe');
-  if (powershell) return { path: powershell, name: 'powershell', args: ['-NoExit'] };
-
-  // cmd.exe fallback
+  // cmd.exe last resort
   const cmdPath = path.join(process.env.SYSTEMROOT || 'C:\\Windows', 'System32', 'cmd.exe');
   return { path: cmdPath, name: 'cmd', args: [] };
 }

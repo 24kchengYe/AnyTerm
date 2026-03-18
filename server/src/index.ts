@@ -134,25 +134,29 @@ server.on('upgrade', (req, socket, head) => {
 // --- Start ---
 
 server.listen(PORT, HOST, () => {
-  const ip = getLocalIP();
+  const ips = getAllLocalIPs();
+  const devUrl = DEV ? `http://localhost:5173` : `http://localhost:${PORT}`;
+
   console.log('');
-  console.log('  ╔══════════════════════════════════════════════════╗');
-  console.log('  ║              AnyTerm is running                  ║');
-  console.log('  ╠══════════════════════════════════════════════════╣');
-  console.log(`  ║  Local:    http://localhost:${PORT}                ║`);
-  console.log(`  ║  Network:  http://${ip.padEnd(15)}:${PORT}        ║`);
-  console.log('  ╠══════════════════════════════════════════════════╣');
-  console.log(`  ║  AI:       ${aiEngine.isAvailable() ? 'Enabled (Claude)' : 'Disabled (no API key)'}${' '.repeat(aiEngine.isAvailable() ? 15 : 13)}║`);
-  console.log(`  ║  Voice:    ${whisper ? 'Enabled (Whisper)' : 'Disabled'}${' '.repeat(whisper ? 14 : 22)}║`);
-  console.log('  ╠══════════════════════════════════════════════════╣');
-  console.log(`  ║  Token:    ${token}  ║`);
-  console.log('  ╚══════════════════════════════════════════════════╝');
+  console.log('  ═══════════════════════════════════════════');
+  console.log('             AnyTerm is running');
+  console.log('  ═══════════════════════════════════════════');
   console.log('');
-  if (DEV) {
-    console.log('  [Dev] Auth disabled. Frontend at http://localhost:5173');
+  console.log(`  电脑访问:  ${devUrl}`);
+  console.log('');
+  if (ips.length > 0) {
+    console.log('  手机访问 (同一WiFi下，浏览器打开):');
+    for (const ip of ips) {
+      console.log(`             http://${ip}:${PORT}`);
+    }
+  } else {
+    console.log('  手机访问:  未检测到局域网IP');
   }
-  console.log('  [Env] ANTHROPIC_API_KEY     → AI chat');
-  console.log('  [Env] ANYTERM_WHISPER_MODEL → Voice input');
+  console.log('');
+  console.log(`  Auth Token: ${token}`);
+  if (aiEngine.isAvailable()) console.log('  AI Chat:    Enabled');
+  if (whisper) console.log('  Voice:      Enabled');
+  console.log('  ═══════════════════════════════════════════');
   console.log('');
 });
 
@@ -164,14 +168,15 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-function getLocalIP(): string {
+function getAllLocalIPs(): string[] {
+  const result: string[] = [];
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name] || []) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        result.push(iface.address);
       }
     }
   }
-  return '0.0.0.0';
+  return result;
 }

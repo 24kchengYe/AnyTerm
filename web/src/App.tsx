@@ -111,6 +111,7 @@ export default function App() {
         sessions={sessions}
         activeId={activeId}
         connected={ws.connected}
+        mobile={mobile}
         onSelect={(id) => {
           setActiveId(id);
           if (!attachedRef.current.has(id)) {
