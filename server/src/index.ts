@@ -14,6 +14,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { TerminalManager } from './terminal/manager.js';
 import { setupTerminalWS } from './ws/terminal.js';
@@ -32,10 +33,24 @@ const token = initAuth();
 const manager = new TerminalManager();
 const aiEngine = new AIEngine(manager);
 
-// Initialize whisper (optional)
+// Initialize whisper — auto-detect local whisper.cpp installation
 let whisper: LocalWhisper | null = null;
 const whisperModel = process.env.ANYTERM_WHISPER_MODEL || '';
+const defaultWhisperPaths = {
+  exe: ['D:/whisper/Release/whisper-cli.exe', 'D:/whisper/whisper-cli.exe', 'whisper-cli'],
+  model: ['D:/whisper/ggml-base.bin', 'D:/whisper/models/ggml-base.bin'],
+  ffmpeg: ['D:/ffmpeg/ffmpeg.exe', 'D:/ffmpeg/bin/ffmpeg.exe', 'C:/ffmpeg/ffmpeg.exe'],
+};
+
+function findFile(paths: string[]): string | null {
+  for (const p of paths) {
+    try { if (fs.existsSync(p)) return p; } catch {}
+  }
+  return null;
+}
+
 if (whisperModel) {
+  // Explicit config via env var
   whisper = new LocalWhisper({
     exePath: process.env.ANYTERM_WHISPER_EXE || 'whisper-cli',
     modelPath: whisperModel,
@@ -44,7 +59,22 @@ if (whisperModel) {
   });
   console.log(`[Speech] Whisper configured (model: ${whisperModel})`);
 } else {
-  console.log('[Speech] Whisper not configured (set ANYTERM_WHISPER_MODEL to enable)');
+  // Auto-detect local whisper.cpp
+  const autoExe = findFile(defaultWhisperPaths.exe);
+  const autoModel = findFile(defaultWhisperPaths.model);
+  const autoFfmpeg = findFile(defaultWhisperPaths.ffmpeg);
+
+  if (autoExe && autoModel) {
+    whisper = new LocalWhisper({
+      exePath: autoExe,
+      modelPath: autoModel,
+      ffmpegPath: autoFfmpeg || undefined,
+      language: process.env.ANYTERM_WHISPER_LANG || 'zh',
+    });
+    console.log(`[Speech] Whisper auto-detected (${autoExe}, ${autoModel})`);
+  } else {
+    console.log('[Speech] Whisper not found (set ANYTERM_WHISPER_MODEL or install to D:/whisper/)');
+  }
 }
 
 const app = express();
