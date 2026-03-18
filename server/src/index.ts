@@ -94,7 +94,8 @@ app.get('/api/settings', (_req, res) => {
 if (!DEV) {
   const webDist = path.resolve(__dirname, '../../web/dist');
   app.use(express.static(webDist));
-  app.get('*', (_req, res) => {
+  // Express 5 uses {*path} instead of * for catch-all
+  app.get('/{*path}', (_req, res) => {
     res.sendFile(path.join(webDist, 'index.html'));
   });
 }

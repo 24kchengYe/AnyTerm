@@ -39,12 +39,22 @@ console.log('');
 console.log('  Starting AnyTerm...');
 console.log('');
 
-const server = spawn('npx', ['tsx', serverEntry], {
-  env,
-  stdio: 'inherit',
-  cwd: root,
-  shell: true,
-});
+// Resolve tsx binary path directly to avoid shell:true deprecation
+import { createRequire } from 'module';
+const require2 = createRequire(path.join(root, 'server', 'package.json'));
+let tsxBin;
+try {
+  // Try local tsx first
+  const tsxPkg = path.dirname(require2.resolve('tsx/package.json'));
+  tsxBin = path.join(tsxPkg, 'dist', 'cli.mjs');
+} catch {
+  // Fallback: use npx with shell (Windows needs it)
+  tsxBin = null;
+}
+
+const server = tsxBin
+  ? spawn(process.execPath, [tsxBin, serverEntry], { env, stdio: 'inherit', cwd: root })
+  : spawn('npx', ['tsx', serverEntry], { env, stdio: 'inherit', cwd: root, shell: true });
 
 if (!noOpen) {
   const url = hasBuild ? `http://localhost:${port}` : `http://localhost:5173`;
