@@ -6,7 +6,7 @@
 import { execSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import os from 'os';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -22,45 +22,41 @@ if (portIdx !== -1 && args[portIdx + 1]) {
 // Parse --no-open
 const noOpen = args.includes('--no-open');
 
-// Check if web/dist exists (production build)
+// Check if built frontend exists → serve it; otherwise dev mode
 const webDist = path.join(root, 'web', 'dist', 'index.html');
-let mode = 'development';
-try {
-  const fs = await import('fs');
-  if (fs.existsSync(webDist)) mode = 'production';
-} catch {}
+const hasBuild = fs.existsSync(webDist);
 
 const env = {
   ...process.env,
   ANYTERM_PORT: port,
-  NODE_ENV: mode,
+  NODE_ENV: hasBuild ? 'production' : 'development',
 };
 
-console.log(`\n  Starting AnyTerm (${mode} mode)...\n`);
+// Always use tsx to run TypeScript source directly (no build step needed)
+const serverEntry = path.join(root, 'server', 'src', 'index.ts');
 
-if (mode === 'production') {
-  // Production: just run the server (serves built frontend)
-  const server = spawn('node', [path.join(root, 'server', 'dist', 'index.js')], {
-    env, stdio: 'inherit', cwd: root,
-  });
+console.log('');
+console.log('  Starting AnyTerm...');
+console.log('');
 
-  if (!noOpen) {
-    setTimeout(() => openBrowser(`http://localhost:${port}`), 1500);
-  }
+const server = spawn('npx', ['tsx', serverEntry], {
+  env,
+  stdio: 'inherit',
+  cwd: root,
+  shell: true,
+});
 
-  server.on('exit', (code) => process.exit(code || 0));
-} else {
-  // Development: use tsx
-  const server = spawn('npx', ['tsx', path.join(root, 'server', 'src', 'index.ts')], {
-    env, stdio: 'inherit', cwd: root, shell: true,
-  });
-
-  if (!noOpen) {
-    setTimeout(() => openBrowser(`http://localhost:${port}`), 2000);
-  }
-
-  server.on('exit', (code) => process.exit(code || 0));
+if (!noOpen) {
+  const url = hasBuild ? `http://localhost:${port}` : `http://localhost:5173`;
+  setTimeout(() => openBrowser(url), 2500);
 }
+
+server.on('exit', (code) => process.exit(code || 0));
+
+// Forward SIGINT to child
+process.on('SIGINT', () => {
+  server.kill('SIGINT');
+});
 
 function openBrowser(url) {
   try {
