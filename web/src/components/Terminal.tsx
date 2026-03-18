@@ -1,10 +1,11 @@
 /**
  * Terminal component — xterm.js wrapper with WebGL, FitAddon, flow control ack.
  *
- * MOBILE STRATEGY (MidTerm approach):
- * - PTY size is controlled ONLY by desktop clients
- * - Mobile does NOT send resize — it CSS-scales the terminal to fit the screen
- * - This means mobile sees exactly the same content as desktop, just smaller
+ * MULTI-DEVICE STRATEGY: "Last active client wins"
+ * Both desktop and mobile use FitAddon normally to determine cols/rows.
+ * The server resizes PTY to whichever client sent the most recent input.
+ * This means: when you type on phone → PTY matches phone width.
+ *             when you type on desktop → PTY matches desktop width.
  */
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
@@ -27,7 +28,6 @@ interface TerminalProps {
 export const TerminalView: React.FC<TerminalProps> = React.memo(({
   sessionId, isActive, mobile, onInput, onResize, onAck,
 }) => {
-  const outerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -40,13 +40,13 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
 
-  // Initialize terminal
   useEffect(() => {
     if (!containerRef.current) return;
 
     let disposed = false;
+    // Mobile: smaller font to fit more columns. Desktop: normal size.
     const terminal = new XTerm({
-      fontSize: 13,
+      fontSize: mobile ? 11 : 13,
       fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
         background: '#1a1b26', foreground: '#c0caf5', cursor: '#c0caf5', cursorAccent: '#1a1b26',
@@ -81,26 +81,22 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     terminal.open(containerRef.current);
 
-    // Desktop: fit terminal to container and resize PTY
-    // Mobile: do NOT fit/resize — CSS scaling handles it
+    // Fit terminal to container — works for both desktop and mobile
     const doFit = () => {
-      if (disposed || !containerRef.current || mobile) return;
+      if (disposed || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      if (rect.width > 100 && rect.height > 50) {
+      if (rect.width > 50 && rect.height > 30) {
         fitAddon.fit();
         const dims = fitAddon.proposeDimensions();
         if (dims) onResize(dims.cols, dims.rows);
       }
     };
+    requestAnimationFrame(() => {
+      doFit();
+      requestAnimationFrame(() => { doFit(); setTimeout(doFit, 200); });
+    });
 
-    if (!mobile) {
-      requestAnimationFrame(() => {
-        doFit();
-        requestAnimationFrame(() => { doFit(); setTimeout(doFit, 200); });
-      });
-    }
-
-    // WebGL + WebLinks addons
+    // WebGL + WebLinks
     (async () => {
       try {
         const { WebglAddon } = await import('@xterm/addon-webgl');
@@ -152,17 +148,17 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     const inputDisposable = terminal.onData(onInput);
 
-    // Resize observer — desktop only
+    // Resize observer
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const throttledResize = () => {
-      if (resizeTimer || mobile) return;
+      if (resizeTimer) return;
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
         doFit();
       }, 100);
     };
     const resizeObserver = new ResizeObserver(throttledResize);
-    if (!mobile) resizeObserver.observe(containerRef.current);
+    resizeObserver.observe(containerRef.current);
 
     // Paste handler
     const handlePaste = (e: ClipboardEvent) => {
@@ -193,9 +189,9 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     };
   }, [sessionId]);
 
-  // Re-fit on becoming active (desktop only)
+  // Re-fit on becoming active
   useEffect(() => {
-    if (isActive && !mobile && fitAddonRef.current && xtermRef.current) {
+    if (isActive && fitAddonRef.current && xtermRef.current) {
       requestAnimationFrame(() => {
         fitAddonRef.current?.fit();
         xtermRef.current?.focus();
@@ -203,40 +199,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
         if (dims) onResize(dims.cols, dims.rows);
       });
     }
-  }, [isActive, mobile, onResize]);
-
-  // Mobile CSS scaling: measure terminal actual size vs container, apply transform
-  useEffect(() => {
-    if (!mobile || !isActive || !containerRef.current || !outerRef.current) return;
-
-    const applyScale = () => {
-      const outer = outerRef.current;
-      const inner = containerRef.current;
-      if (!outer || !inner) return;
-
-      const outerW = outer.clientWidth;
-      const innerW = inner.scrollWidth;
-      if (innerW > outerW && innerW > 0) {
-        const scale = outerW / innerW;
-        inner.style.transform = `scale(${scale})`;
-        inner.style.transformOrigin = 'top left';
-        inner.style.width = `${innerW}px`;
-        inner.style.height = `${inner.scrollHeight}px`;
-        outer.style.overflow = 'hidden';
-      } else {
-        inner.style.transform = '';
-        inner.style.transformOrigin = '';
-        inner.style.width = '100%';
-        inner.style.height = '100%';
-      }
-    };
-
-    // Apply after terminal renders
-    const timer = setTimeout(applyScale, 300);
-    const interval = setInterval(applyScale, 2000); // Re-check periodically
-
-    return () => { clearTimeout(timer); clearInterval(interval); };
-  }, [mobile, isActive, ready]);
+  }, [isActive, onResize]);
 
   const dismissHint = useCallback(() => {
     setShowMobileHint(false);
@@ -255,13 +218,15 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
           padding: '6px 12px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', fontSize: 12, color: '#7aa2f7', flexShrink: 0,
         }}>
-          <span>Mobile view — use input bar below. Rotate for wider view.</span>
+          <span>Terminal auto-fits your screen. Rotate for wider view.</span>
           <button onClick={dismissHint} style={{ background: 'none', border: 'none', color: '#565f89', cursor: 'pointer', padding: '0 4px', fontSize: 14 }} aria-label="Dismiss">×</button>
         </div>
       )}
-      <div ref={outerRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-        <div ref={containerRef} data-session-id={sessionId} style={{ width: '100%', height: '100%' }} />
-      </div>
+      <div
+        ref={containerRef}
+        data-session-id={sessionId}
+        style={{ width: '100%', flex: 1, minHeight: 0 }}
+      />
     </div>
   );
 });

@@ -1,6 +1,12 @@
 /**
  * WebSocket handler for terminal I/O.
- * Tracks per-client viewport size, uses the LARGEST connected viewport for PTY resize.
+ *
+ * RESIZE STRATEGY: "Last active client wins"
+ * - Each client sends its own resize based on FitAddon
+ * - PTY is resized to match whoever sent the most recent INPUT
+ * - This way: desktop user typing → PTY stays 120 cols
+ *             phone user typing → PTY shrinks to 45 cols
+ * - Since you rarely type on both simultaneously, this works well
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import type { IncomingMessage } from 'http';
@@ -13,24 +19,19 @@ function safeSend(ws: WebSocket, data: Record<string, unknown>): void {
   }
 }
 
-// Track all clients' viewport sizes per session
+// Track per-client viewport and last-active client per session
 const clientViewports = new Map<string, Map<WebSocket, { cols: number; rows: number }>>();
+const lastActiveClient = new Map<string, WebSocket>();
 
-function updateSessionSize(sessionId: string, manager: TerminalManager): void {
+function resizeToActiveClient(sessionId: string, manager: TerminalManager): void {
+  const active = lastActiveClient.get(sessionId);
+  if (!active) return;
   const viewports = clientViewports.get(sessionId);
-  if (!viewports || viewports.size === 0) return;
-
-  // Use the LARGEST cols among all clients (so desktop isn't shrunk by phone)
-  let maxCols = 0;
-  let maxRows = 0;
-  for (const { cols, rows } of viewports.values()) {
-    if (cols > maxCols) { maxCols = cols; maxRows = rows; }
-  }
-
-  if (maxCols > 0 && maxRows > 0) {
-    const session = manager.get(sessionId);
-    if (session) session.resize(maxCols, maxRows);
-  }
+  if (!viewports) return;
+  const dims = viewports.get(active);
+  if (!dims) return;
+  const session = manager.get(sessionId);
+  if (session) session.resize(dims.cols, dims.rows);
 }
 
 // Broadcast session list to ALL connected clients
@@ -51,7 +52,6 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
 
     const subscribe = (session: TerminalSession) => {
       if (subscriptions.has(session.id)) return;
-
       const onOutput = (e: { id: string; data: string }) => {
         safeSend(ws, { type: 'output', id: e.id, data: e.data });
       };
@@ -59,7 +59,6 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
         safeSend(ws, { type: 'exit', id: e.id, exitCode: e.exitCode });
         unsubscribeById(e.id);
       };
-
       session.on('output', onOutput);
       session.on('exit', onExit);
       subscriptions.set(session.id, { onOutput, onExit });
@@ -74,14 +73,13 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
         session.off('exit', handlers.onExit);
       }
       subscriptions.delete(id);
-
-      // Remove this client's viewport for this session
+      // Clean up viewport tracking
       const viewports = clientViewports.get(id);
       if (viewports) {
         viewports.delete(ws);
         if (viewports.size === 0) clientViewports.delete(id);
-        else updateSessionSize(id, manager);
       }
+      if (lastActiveClient.get(id) === ws) lastActiveClient.delete(id);
     };
 
     safeSend(ws, { type: 'sessions', sessions: manager.list() });
@@ -94,6 +92,12 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
           case 'create': {
             const session = manager.create(msg.cwd, msg.cols, msg.rows);
             subscribe(session);
+            // This client created it, so it's the active client
+            lastActiveClient.set(session.id, ws);
+            if (msg.cols && msg.rows) {
+              if (!clientViewports.has(session.id)) clientViewports.set(session.id, new Map());
+              clientViewports.get(session.id)!.set(ws, { cols: msg.cols, rows: msg.rows });
+            }
             broadcastSessions(wss, manager);
             safeSend(ws, { type: 'created', id: session.id });
             break;
@@ -108,7 +112,6 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
               break;
             }
             subscribe(session);
-            // Send only recent output (last 50KB) to avoid flooding on reconnect
             const scrollback = session.getRecentOutput(50000);
             if (scrollback) {
               safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
@@ -119,7 +122,15 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
           case 'input': {
             if (typeof msg.id !== 'string' || typeof msg.data !== 'string') break;
             const session = manager.get(msg.id);
-            if (session) session.write(msg.data);
+            if (session) {
+              session.write(msg.data);
+              // Mark this client as active → resize PTY to this client's viewport
+              const prev = lastActiveClient.get(msg.id);
+              if (prev !== ws) {
+                lastActiveClient.set(msg.id, ws);
+                resizeToActiveClient(msg.id, manager);
+              }
+            }
             break;
           }
 
@@ -129,14 +140,17 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             const rows = typeof msg.rows === 'number' ? msg.rows : 0;
             if (cols < 20 || rows < 5 || cols > 500 || rows > 200) break;
 
-            // Store this client's viewport size
-            if (!clientViewports.has(msg.id)) {
-              clientViewports.set(msg.id, new Map());
-            }
+            // Store this client's viewport
+            if (!clientViewports.has(msg.id)) clientViewports.set(msg.id, new Map());
             clientViewports.get(msg.id)!.set(ws, { cols, rows });
 
-            // Resize PTY to the largest connected viewport
-            updateSessionSize(msg.id, manager);
+            // Only resize PTY if this client is the active one (or the only one)
+            const active = lastActiveClient.get(msg.id);
+            if (!active || active === ws) {
+              lastActiveClient.set(msg.id, ws);
+              const session = manager.get(msg.id);
+              if (session) session.resize(cols, rows);
+            }
             break;
           }
 
@@ -154,7 +168,8 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             unsubscribeById(msg.id);
             manager.destroy(msg.id);
             clientViewports.delete(msg.id);
-            broadcastSessions(wss, manager); // Notify ALL clients
+            lastActiveClient.delete(msg.id);
+            broadcastSessions(wss, manager);
             break;
           }
 
@@ -170,13 +185,21 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
     });
 
     ws.on('close', () => {
-      // Remove this client's viewports and unsubscribe
       for (const [id] of subscriptions) {
         const viewports = clientViewports.get(id);
         if (viewports) {
           viewports.delete(ws);
           if (viewports.size === 0) clientViewports.delete(id);
-          else updateSessionSize(id, manager);
+        }
+        if (lastActiveClient.get(id) === ws) {
+          lastActiveClient.delete(id);
+          // If another client is connected, resize to it
+          const remaining = clientViewports.get(id);
+          if (remaining && remaining.size > 0) {
+            const [nextWs] = remaining.keys();
+            lastActiveClient.set(id, nextWs);
+            resizeToActiveClient(id, manager);
+          }
         }
         unsubscribeById(id);
       }
