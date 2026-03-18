@@ -10,6 +10,7 @@ interface MobileBarProps {
 }
 
 const SHORTCUTS = [
+  { label: 'Enter', data: '\r' },
   { label: 'Tab', data: '\t' },
   { label: 'Esc', data: '\x1b' },
   { label: 'Ctrl+C', data: '\x03' },
