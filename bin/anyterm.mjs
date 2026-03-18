@@ -39,6 +39,24 @@ const env = {
 
 const serverEntry = path.join(root, 'server', 'src', 'index.ts');
 
+// Ensure Windows firewall allows incoming connections on the port
+if (process.platform === 'win32') {
+  try {
+    // Check if rule exists
+    const check = execSync(`netsh advfirewall firewall show rule name="AnyTerm"`, { encoding: 'utf8', stdio: 'pipe' });
+  } catch {
+    // Rule doesn't exist — try to add it (needs admin, may fail silently)
+    try {
+      execSync(`powershell -Command "Start-Process netsh -ArgumentList 'advfirewall firewall add rule name=AnyTerm dir=in action=allow protocol=TCP localport=${port}' -Verb RunAs -Wait"`, { stdio: 'pipe', timeout: 15000 });
+      console.log('  [Firewall] Rule added for port ' + port);
+    } catch {
+      console.log('  [Firewall] Could not add rule. If phone cannot connect,');
+      console.log('             run as admin: netsh advfirewall firewall add rule name="AnyTerm" dir=in action=allow protocol=TCP localport=' + port);
+      console.log('');
+    }
+  }
+}
+
 // Resolve tsx binary directly (avoid shell:true deprecation)
 const require2 = createRequire(path.join(root, 'server', 'package.json'));
 let tsxBin;

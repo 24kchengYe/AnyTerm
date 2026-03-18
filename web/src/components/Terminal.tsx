@@ -150,6 +150,17 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       terminal.write(data);
     };
 
+    // Expose buffer extraction for export
+    (el as any).__getBuffer = (): string => {
+      const buf = terminal.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (line) lines.push(line.translateToString(true));
+      }
+      return lines.join('\n');
+    };
+
     // Input handler
     const inputDisposable = terminal.onData(onInput);
 
