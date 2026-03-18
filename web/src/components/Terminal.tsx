@@ -152,13 +152,15 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     const resizeObserver = new ResizeObserver(throttledResize);
     resizeObserver.observe(containerRef.current);
 
-    // Paste handler
+    // Paste handler (clipboard access can throw in restricted contexts)
     const handlePaste = (e: ClipboardEvent) => {
-      const text = e.clipboardData?.getData('text');
-      if (text && terminal && !disposed) {
-        e.preventDefault();
-        terminal.paste(text);
-      }
+      try {
+        const text = e.clipboardData?.getData('text');
+        if (text && terminal && !disposed) {
+          e.preventDefault();
+          terminal.paste(text);
+        }
+      } catch { /* clipboard access denied */ }
     };
     el.addEventListener('paste', handlePaste);
 

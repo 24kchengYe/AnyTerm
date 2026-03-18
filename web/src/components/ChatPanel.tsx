@@ -3,7 +3,7 @@
  * ALL commands require user confirmation before execution.
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Bot, User, ChevronDown, ChevronUp, Terminal, Check, X, Loader, AlertTriangle, Zap } from 'lucide-react';
+import { Send, Bot, User, ChevronDown, ChevronUp, Terminal, Check, X, Loader, AlertTriangle, Zap, Trash2 } from 'lucide-react';
 import { useChatWS, type ChatMessage } from '../hooks/useChatWS.js';
 import { VoiceButton } from './VoiceButton.js';
 
@@ -64,6 +64,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking]);
 
+  // Auto-reject stale pending command after 60 seconds
+  useEffect(() => {
+    if (!pendingCommand) return;
+    const timer = setTimeout(() => {
+      setPendingCommand(null);
+      chat.rejectCommand();
+      setMessages(prev => [...prev, { role: 'system', content: 'Command timed out (60s).', timestamp: new Date() }]);
+    }, 60000);
+    return () => clearTimeout(timer);
+  }, [pendingCommand, chat]);
+
   useEffect(() => {
     if (expanded) inputRef.current?.focus();
   }, [expanded]);
@@ -107,7 +118,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           {aiAvailable ? <Zap size={11} color="#9ece6a" /> : <span style={{ fontSize: 11, color: '#565f89' }}>(no API key)</span>}
           {thinking && <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} />}
         </div>
-        {expanded ? <ChevronDown size={14} color="#565f89" /> : <ChevronUp size={14} color="#565f89" />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {expanded && messages.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setMessages([]); setPendingCommand(null); }}
+              style={{ background: 'none', border: 'none', color: '#565f89', cursor: 'pointer', padding: 2, display: 'flex' }}
+              title="Clear chat"
+              aria-label="Clear chat"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+          {expanded ? <ChevronDown size={14} color="#565f89" /> : <ChevronUp size={14} color="#565f89" />}
+        </div>
       </div>
 
       {expanded && (

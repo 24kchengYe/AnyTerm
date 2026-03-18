@@ -1,6 +1,6 @@
 /**
  * WebSocket hook for terminal communication.
- * Manages connection lifecycle, auto-reconnect, and message routing.
+ * Manages connection lifecycle, exponential backoff reconnect, and message routing.
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 
@@ -13,16 +13,6 @@ export interface TerminalSessionInfo {
   rows: number;
   alive: boolean;
   lastActivity: string;
-}
-
-interface WSMessage {
-  type: string;
-  id?: string;
-  data?: string;
-  sessions?: TerminalSessionInfo[];
-  exitCode?: number;
-  message?: string;
-  bytes?: number;
 }
 
 interface UseTerminalWSOptions {
@@ -38,11 +28,16 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
   const optionsRef = useRef(options);
   const [connected, setConnected] = useState(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
+  const connectingRef = useRef(false);
 
   optionsRef.current = options;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // Prevent concurrent connections
+    if (connectingRef.current) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
+    connectingRef.current = true;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -50,6 +45,8 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
 
     ws.onopen = () => {
       console.log('[WS] Connected to terminal server');
+      connectingRef.current = false;
+      reconnectAttempts.current = 0;
       setConnected(true);
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
@@ -59,7 +56,7 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
 
     ws.onmessage = (event) => {
       try {
-        const msg: WSMessage = JSON.parse(event.data);
+        const msg = JSON.parse(event.data);
         const opts = optionsRef.current;
 
         switch (msg.type) {
@@ -83,20 +80,23 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
             break;
         }
       } catch (err) {
-        console.error('[WS] Failed to parse message:', err);
+        console.error('[WS] Parse error:', err);
       }
     };
 
     ws.onclose = () => {
       console.log('[WS] Disconnected');
+      connectingRef.current = false;
       setConnected(false);
       wsRef.current = null;
-      // Auto-reconnect after 2s
-      reconnectTimer.current = setTimeout(connect, 2000);
+      // Exponential backoff: 2s, 3s, 4.5s, ... max 30s
+      const delay = Math.min(30000, 2000 * Math.pow(1.5, reconnectAttempts.current));
+      reconnectAttempts.current++;
+      reconnectTimer.current = setTimeout(connect, delay);
     };
 
-    ws.onerror = (err) => {
-      console.error('[WS] Error:', err);
+    ws.onerror = () => {
+      // onclose will fire after onerror, no need to handle separately
     };
 
     wsRef.current = ws;
@@ -116,37 +116,13 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
     }
   }, []);
 
-  const createSession = useCallback((cwd?: string, cols?: number, rows?: number) => {
-    send({ type: 'create', cwd, cols, rows });
-  }, [send]);
-
-  const attachSession = useCallback((id: string) => {
-    send({ type: 'attach', id });
-  }, [send]);
-
-  const writeInput = useCallback((id: string, data: string) => {
-    send({ type: 'input', id, data });
-  }, [send]);
-
-  const resizeTerminal = useCallback((id: string, cols: number, rows: number) => {
-    send({ type: 'resize', id, cols, rows });
-  }, [send]);
-
-  const ackBytes = useCallback((id: string, bytes: number) => {
-    send({ type: 'ack', id, bytes });
-  }, [send]);
-
-  const destroySession = useCallback((id: string) => {
-    send({ type: 'destroy', id });
-  }, [send]);
-
   return {
     connected,
-    createSession,
-    attachSession,
-    writeInput,
-    resizeTerminal,
-    ackBytes,
-    destroySession,
+    createSession: useCallback((cwd?: string, cols?: number, rows?: number) => send({ type: 'create', cwd, cols, rows }), [send]),
+    attachSession: useCallback((id: string) => send({ type: 'attach', id }), [send]),
+    writeInput: useCallback((id: string, data: string) => send({ type: 'input', id, data }), [send]),
+    resizeTerminal: useCallback((id: string, cols: number, rows: number) => send({ type: 'resize', id, cols, rows }), [send]),
+    ackBytes: useCallback((id: string, bytes: number) => send({ type: 'ack', id, bytes }), [send]),
+    destroySession: useCallback((id: string) => send({ type: 'destroy', id }), [send]),
   };
 }

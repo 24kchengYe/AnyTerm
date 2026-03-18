@@ -50,9 +50,10 @@ if (whisperModel) {
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// CORS: allow access from any origin (needed for remote access from phone browser)
+// CORS: configurable origin (default * for LAN/Tailscale access from phone)
+const CORS_ORIGIN = process.env.ANYTERM_CORS_ORIGIN || '*';
 app.use((_req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Origin', CORS_ORIGIN);
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (_req.method === 'OPTIONS') { res.status(204).end(); return; }

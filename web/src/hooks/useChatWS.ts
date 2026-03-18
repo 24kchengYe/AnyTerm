@@ -1,5 +1,6 @@
 /**
  * WebSocket hook for AI chat communication.
+ * Exponential backoff reconnect.
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 
@@ -24,22 +25,25 @@ export function useChatWS(options: UseChatWSOptions) {
   const optionsRef = useRef(options);
   const [connected, setConnected] = useState(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
+  const connectingRef = useRef(false);
 
   optionsRef.current = options;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (connectingRef.current) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
+    connectingRef.current = true;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const ws = new WebSocket(`${protocol}//${host}/ws/chat`);
 
     ws.onopen = () => {
+      connectingRef.current = false;
+      reconnectAttempts.current = 0;
       setConnected(true);
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = null;
-      }
+      if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
     };
 
     ws.onmessage = (event) => {
@@ -51,20 +55,12 @@ export function useChatWS(options: UseChatWSOptions) {
           case 'reply':
             opts.onThinking(false);
             opts.onMessage({
-              role: 'assistant',
-              content: msg.text,
-              command: msg.command,
-              dangerous: msg.dangerous,
-              targetTerminal: msg.targetTerminal,
-              timestamp: new Date(),
+              role: 'assistant', content: msg.text, command: msg.command,
+              dangerous: msg.dangerous, targetTerminal: msg.targetTerminal, timestamp: new Date(),
             });
             break;
           case 'executing':
-            opts.onMessage({
-              role: 'system',
-              content: `Executing: \`${msg.command}\` in Terminal ${msg.targetTerminal}`,
-              timestamp: new Date(),
-            });
+            opts.onMessage({ role: 'system', content: `Executing: \`${msg.command}\` in Terminal ${msg.targetTerminal}`, timestamp: new Date() });
             break;
           case 'thinking':
             opts.onThinking(true);
@@ -77,11 +73,7 @@ export function useChatWS(options: UseChatWSOptions) {
             break;
           case 'error':
             opts.onThinking(false);
-            opts.onMessage({
-              role: 'system',
-              content: `Error: ${msg.message}`,
-              timestamp: new Date(),
-            });
+            opts.onMessage({ role: 'system', content: `Error: ${msg.message}`, timestamp: new Date() });
             break;
         }
       } catch (err) {
@@ -90,11 +82,15 @@ export function useChatWS(options: UseChatWSOptions) {
     };
 
     ws.onclose = () => {
+      connectingRef.current = false;
       setConnected(false);
       wsRef.current = null;
-      reconnectTimer.current = setTimeout(connect, 2000);
+      const delay = Math.min(30000, 2000 * Math.pow(1.5, reconnectAttempts.current));
+      reconnectAttempts.current++;
+      reconnectTimer.current = setTimeout(connect, delay);
     };
 
+    ws.onerror = () => {};
     wsRef.current = ws;
   }, []);
 
@@ -112,21 +108,11 @@ export function useChatWS(options: UseChatWSOptions) {
     }
   }, []);
 
-  const sendMessage = useCallback((text: string, targetTerminal?: string) => {
-    send({ type: 'message', text, targetTerminal });
-  }, [send]);
-
-  const sendVoice = useCallback((audio: string, format: string, targetTerminal?: string) => {
-    send({ type: 'voice', audio, format, targetTerminal });
-  }, [send]);
-
-  const confirmCommand = useCallback(() => {
-    send({ type: 'confirm' });
-  }, [send]);
-
-  const rejectCommand = useCallback(() => {
-    send({ type: 'reject' });
-  }, [send]);
-
-  return { connected, sendMessage, sendVoice, confirmCommand, rejectCommand };
+  return {
+    connected,
+    sendMessage: useCallback((text: string, targetTerminal?: string) => send({ type: 'message', text, targetTerminal }), [send]),
+    sendVoice: useCallback((audio: string, format: string, targetTerminal?: string) => send({ type: 'voice', audio, format, targetTerminal }), [send]),
+    confirmCommand: useCallback(() => send({ type: 'confirm' }), [send]),
+    rejectCommand: useCallback(() => send({ type: 'reject' }), [send]),
+  };
 }

@@ -70,15 +70,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             To access AnyTerm from your phone or other devices:
           </p>
           <div style={{ marginTop: 10, fontSize: 12, color: '#565f89', lineHeight: 1.8 }}>
-            <b style={{ color: '#7aa2f7' }}>Same WiFi:</b> Open <code style={codeStyle}>http://YOUR_PC_IP:7860</code> in phone browser<br/>
+            <b style={{ color: '#7aa2f7' }}>Same WiFi:</b> Open <code style={codeStyle}>http://YOUR_PC_IP:{window.location.port || '7860'}</code> in phone browser<br/>
             <b style={{ color: '#7aa2f7' }}>Remote (Tailscale):</b><br/>
             <code style={codeStyle}>
               # Install Tailscale on PC and phone{'\n'}
               # Then access via Tailscale IP:{'\n'}
-              http://100.x.x.x:7860
+              http://100.x.x.x:{window.location.port || '7860'}
             </code><br/>
             <b style={{ color: '#7aa2f7' }}>Remote (ZeroTier):</b> Similar to Tailscale, use ZeroTier IP<br/>
-            <b style={{ color: '#7aa2f7' }}>Remote (FRP):</b> Configure frpc to forward port 7860
+            <b style={{ color: '#7aa2f7' }}>Remote (FRP):</b> Configure frpc to forward the server port
           </div>
         </Section>
 

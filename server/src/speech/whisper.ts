@@ -28,6 +28,12 @@ export class LocalWhisper {
     this.modelPath = opts.modelPath;
     this.ffmpegPath = opts.ffmpegPath || null;
     this.language = opts.language || '';
+
+    // Validate model path at init time
+    const fs = require('fs');
+    if (!fs.existsSync(this.modelPath)) {
+      console.warn(`[Whisper] Model file not found: ${this.modelPath}`);
+    }
   }
 
   async transcribe(audioBuffer: Buffer, format: string): Promise<STTResult> {

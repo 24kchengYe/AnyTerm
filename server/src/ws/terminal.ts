@@ -120,6 +120,7 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
         }
       } catch (err) {
         console.error('[WS:Terminal] Message handling error:', err);
+        safeSend(ws, { type: 'error', message: 'Invalid message format' });
       }
     });
 

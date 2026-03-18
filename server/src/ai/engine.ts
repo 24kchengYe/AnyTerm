@@ -69,10 +69,11 @@ export class AIEngine {
 
   async process(userMessage: string, targetTerminalId?: string): Promise<AIResponse> {
     if (!this.client) {
-      return {
-        type: 'error',
-        text: 'AI not configured. Set ANTHROPIC_API_KEY environment variable.',
-      };
+      return { type: 'error', text: 'AI not configured. Set ANTHROPIC_API_KEY environment variable.' };
+    }
+
+    if (userMessage.length > 5000) {
+      return { type: 'error', text: 'Message too long (max 5000 characters).' };
     }
 
     // Get terminal context

@@ -168,7 +168,7 @@ export class TerminalSession extends EventEmitter {
 
   resize(cols: number, rows: number): void {
     if (!this.alive) return;
-    if (cols < 10 || rows < 3) return;
+    if (cols < 20 || rows < 5 || cols > 500 || rows > 200) return;
     this.cols = cols;
     this.rows = rows;
     this.ptyProcess.resize(cols, rows);
