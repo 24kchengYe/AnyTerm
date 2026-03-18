@@ -37,8 +37,9 @@ export function useChatWS(options: UseChatWSOptions) {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const token = localStorage.getItem('anyterm_token') || '';
-    const tokenParam = token ? `?token=${token}` : '';
+    const getCk = (n: string) => { const m = document.cookie.match(new RegExp(`(?:^|; )${n}=([^;]*)`)); return m ? decodeURIComponent(m[1]) : null; };
+    const token = localStorage.getItem('anyterm_token') || getCk('anyterm_token') || '';
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const ws = new WebSocket(`${protocol}//${host}/ws/chat${tokenParam}`);
 
     ws.onopen = () => {

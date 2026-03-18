@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
 import { TerminalManager } from './terminal/manager.js';
 import { setupTerminalWS } from './ws/terminal.js';
 import { setupChatWS } from './ws/chat.js';
-import { initAuth, getToken, validateRequest } from './auth.js';
+import { initAuth, getToken, hasPassword, validateRequest } from './auth.js';
 import { AIEngine } from './ai/engine.js';
 import { LocalWhisper, checkWhisperAvailable } from './speech/whisper.js';
 
@@ -98,17 +98,49 @@ app.get('/api/sessions', (_req, res) => {
   res.json(manager.list());
 });
 
-app.get('/api/auth', (req, res) => {
-  const t = req.query.token as string;
-  if (t === getToken()) {
-    res.cookie('anyterm_token', t, {
-      httpOnly: true,
-      sameSite: 'strict',
+// Login endpoint — POST { password: "xxx" } → sets cookie
+app.post('/api/login', (req, res) => {
+  const { password } = req.body || {};
+  if (typeof password === 'string' && password === getToken()) {
+    res.cookie('anyterm_token', password, {
+      httpOnly: false, // JS needs to read it for WebSocket
+      sameSite: 'lax',
       maxAge: 365 * 24 * 60 * 60 * 1000,
     });
     res.json({ ok: true });
   } else {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: 'Wrong password' });
+  }
+});
+
+app.get('/api/auth-check', (req, res) => {
+  const remoteAddr = req.socket.remoteAddress || '';
+  const isLocal = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
+  if (isLocal || !hasPassword()) {
+    res.json({ authenticated: true });
+  } else {
+    res.json({ authenticated: validateRequest(req), needsPassword: hasPassword() });
+  }
+});
+
+// Voice transcription endpoint (for mobile voice button)
+app.post('/api/voice', async (req, res) => {
+  if (!whisper) {
+    res.status(400).json({ error: 'Whisper not available' });
+    return;
+  }
+  try {
+    const { audio, format } = req.body;
+    if (!audio || typeof audio !== 'string') {
+      res.status(400).json({ error: 'No audio data' });
+      return;
+    }
+    const buf = Buffer.from(audio, 'base64');
+    const result = await whisper.transcribe(buf, format || 'webm');
+    res.json({ text: result.text });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: msg });
   }
 });
 
@@ -189,7 +221,12 @@ server.listen(PORT, HOST, () => {
     console.log('  手机访问:  未检测到局域网IP');
   }
   console.log('');
-  console.log(`  Auth Token: ${token}`);
+  if (hasPassword()) {
+    console.log('  Password:   Set (remote access protected)');
+  } else {
+    console.log('  Password:   Not set (localhost only)');
+    console.log('              Set via: echo "yourpass" > ~/.anyterm_password');
+  }
   if (aiEngine.isAvailable()) console.log('  AI Chat:    Enabled');
   if (whisper) console.log('  Voice:      Enabled');
   console.log('  ═══════════════════════════════════════════');

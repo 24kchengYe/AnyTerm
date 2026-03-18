@@ -4,6 +4,11 @@
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export interface TerminalSessionInfo {
   id: string;
   title: string;
@@ -41,9 +46,9 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    // Append token for remote (non-localhost) connections
-    const token = localStorage.getItem('anyterm_token') || '';
-    const tokenParam = token ? `?token=${token}` : '';
+    // Append token for remote connections (from localStorage or cookie)
+    const token = localStorage.getItem('anyterm_token') || getCookie('anyterm_token') || '';
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const ws = new WebSocket(`${protocol}//${host}/ws/terminal${tokenParam}`);
 
     ws.onopen = () => {

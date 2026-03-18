@@ -8,11 +8,13 @@ import { ChatPanel } from './components/ChatPanel.js';
 import { MobileBar } from './components/MobileBar.js';
 import { SettingsPanel } from './components/Settings.js';
 import { ConfirmDialog } from './components/ConfirmDialog.js';
+import { LoginPage } from './components/LoginPage.js';
 import { useTerminalWS, type TerminalSessionInfo } from './hooks/useTerminalWS.js';
 
 const isMobile = () => window.innerWidth < 768;
 
 export default function App() {
+  const [authState, setAuthState] = useState<'checking' | 'needsLogin' | 'ok'>('checking');
   const [sessions, setSessions] = useState<TerminalSessionInfo[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
@@ -21,6 +23,49 @@ export default function App() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [closeConfirm, setCloseConfirm] = useState<string | null>(null);
   const attachedRef = useRef<Set<string>>(new Set());
+
+  // Check auth on mount
+  useEffect(() => {
+    fetch('/api/auth-check')
+      .then(r => r.json())
+      .then(data => {
+        if (data.authenticated) setAuthState('ok');
+        else if (data.needsPassword) setAuthState('needsLogin');
+        else setAuthState('ok');
+      })
+      .catch(() => setAuthState('ok')); // If can't reach server, let WS handle it
+  }, []);
+
+  // Fetch server capabilities
+  const [whisperAvailable, setWhisperAvailable] = useState(false);
+  useEffect(() => {
+    if (authState !== 'ok') return;
+    fetch('/api/settings').then(r => r.json()).then(d => setWhisperAvailable(d.whisper)).catch(() => {});
+  }, [authState]);
+
+  // Voice handler: send to server for transcription, result becomes terminal input
+  const handleVoice = useCallback(async (audio: string, format: string) => {
+    // Use chat WS if available, otherwise simple fetch
+    try {
+      const res = await fetch('/api/voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio, format }),
+      });
+      const data = await res.json();
+      if (data.text && activeId) {
+        ws.writeInput(activeId, data.text + '\r');
+      }
+    } catch { /* ignore */ }
+  }, [activeId]);
+
+  if (authState === 'checking') {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1b26', color: '#565f89' }}>Loading...</div>;
+  }
+
+  if (authState === 'needsLogin') {
+    return <LoginPage onLogin={() => setAuthState('ok')} />;
+  }
 
   useEffect(() => {
     const handler = () => setMobile(isMobile());
@@ -156,7 +201,7 @@ export default function App() {
         ))}
       </div>
 
-      {mobile && activeId && <MobileBar onSend={handleInput} />}
+      {mobile && activeId && <MobileBar onSend={handleInput} whisperAvailable={whisperAvailable} onVoice={handleVoice} />}
 
       {chatExpanded && (
         <ChatPanel expanded={chatExpanded} onToggle={() => setChatExpanded(false)}
