@@ -112,9 +112,11 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
               break;
             }
             subscribe(session);
-            // No scrollback replay — same as ttyd/gotty.
-            // Clients only see output generated AFTER they connect.
-            // xterm.js has its own 5000-line scrollback for current session.
+            // Send scrollback for page refresh/new device (client deduplicates)
+            const scrollback = session.getRecentOutput(50000);
+            if (scrollback) {
+              safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
+            }
             break;
           }
 
