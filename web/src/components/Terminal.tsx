@@ -48,14 +48,14 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     const terminal = new XTerm({
       fontSize: mobile ? 11 : 13,
       fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
-      // High-contrast geek theme — bright colors on pure black
+      // Matrix hacker theme — green phosphor on deep black
       theme: {
-        background: '#0a0a0a', foreground: '#f0f0f0', cursor: '#00ff41', cursorAccent: '#0a0a0a',
-        selectionBackground: '#264f2a',
-        black: '#0a0a0a', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c',
-        blue: '#6272a4', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2',
-        brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5',
-        brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff',
+        background: '#0c0c0c', foreground: '#e0e0e0', cursor: '#00ff41', cursorAccent: '#0c0c0c',
+        selectionBackground: '#1a3a1a',
+        black: '#0c0c0c',       red: '#ff3333',      green: '#00ff41',    yellow: '#ffff00',
+        blue: '#00aaff',         magenta: '#ff00ff',  cyan: '#00ffff',     white: '#e0e0e0',
+        brightBlack: '#555555',  brightRed: '#ff6666', brightGreen: '#33ff66', brightYellow: '#ffff66',
+        brightBlue: '#66ccff',   brightMagenta: '#ff66ff', brightCyan: '#66ffff', brightWhite: '#ffffff',
       },
       scrollback: 5000,
       cursorBlink: true,
@@ -130,8 +130,10 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     const heartbeat = setInterval(flushAck, ACK_HEARTBEAT);
 
     const el = containerRef.current;
-    // Clear terminal (used before scrollback replay to prevent duplication)
+    // Full clear (used before scrollback replay to prevent duplication)
     (el as any).__clearTerminal = () => {
+      // Write ANSI clear screen + move cursor to top + clear scrollback
+      terminal.write('\x1b[2J\x1b[H\x1b[3J');
       terminal.clear();
     };
 

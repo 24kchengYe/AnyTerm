@@ -177,7 +177,7 @@ export default function App() {
 
   // Auth gate: show login or loading BEFORE terminal UI
   if (authState === 'checking') {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0a', color: '#777' }}>Loading...</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0c0c0c', color: '#777' }}>Loading...</div>;
   }
 
   if (authState === 'needsLogin') {
@@ -185,7 +185,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: '#0a0a0a' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: '#0c0c0c' }}>
       <TerminalTabs
         sessions={sessions} activeId={activeId} connected={ws.connected} mobile={mobile} names={names}
         onSelect={(id) => { setActiveId(id); if (!attachedRef.current.has(id)) { ws.attachSession(id); attachedRef.current.add(id); } }}
@@ -239,7 +239,7 @@ export default function App() {
           left: '50%',
           transform: 'translateX(-50%)',
           background: '#50fa7b',
-          color: '#0a0a0a',
+          color: '#0c0c0c',
           padding: '8px 20px',
           borderRadius: 8,
           fontSize: 13,

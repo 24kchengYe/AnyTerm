@@ -41,22 +41,22 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: '#141414', borderRadius: 10, border: '1px solid #2a2a2a',
+          background: '#161616', borderRadius: 10, border: '1px solid #1a2a1a',
           padding: 20, width: 340, maxWidth: '85vw',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <AlertTriangle size={20} color="#ff5555" />
-          <h3 style={{ margin: 0, fontSize: 15, color: '#f0f0f0' }}>{title}</h3>
+          <AlertTriangle size={20} color="#ff3333" />
+          <h3 style={{ margin: 0, fontSize: 15, color: '#e0e0e0' }}>{title}</h3>
         </div>
-        <p style={{ fontSize: 13, color: '#ccc', lineHeight: 1.6, margin: '0 0 18px' }}>{message}</p>
+        <p style={{ fontSize: 13, color: '#aaa', lineHeight: 1.6, margin: '0 0 18px' }}>{message}</p>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button
             ref={cancelRef}
             onClick={onCancel}
             style={{
               padding: '7px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
-              background: '#2a2a2a', border: '1px solid #444', color: '#ccc',
+              background: '#1a2a1a', border: '1px solid #2a4a2a', color: '#aaa',
             }}
           >
             {cancelLabel}
@@ -65,7 +65,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             onClick={onConfirm}
             style={{
               padding: '7px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
-              background: '#ff555522', border: '1px solid #ff555566', color: '#ff5555',
+              background: '#ff333322', border: '1px solid #ff333366', color: '#ff3333',
             }}
           >
             {confirmLabel}

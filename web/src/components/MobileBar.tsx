@@ -37,8 +37,8 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
 
   return (
     <div style={{
-      background: '#050505',
-      borderTop: '1px solid #2a2a2a',
+      background: '#060606',
+      borderTop: '1px solid #1a2a1a',
       flexShrink: 0,
     }}>
       {/* Shortcut buttons row */}
@@ -55,10 +55,10 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
               key={s.label}
               onClick={() => onSend(s.data)}
               style={{
-                background: '#141414',
-                border: '1px solid #2a2a2a',
+                background: '#161616',
+                border: '1px solid #1a2a1a',
                 borderRadius: 6,
-                color: '#ccc',
+                color: '#aaa',
                 fontSize: 13,
                 padding: '6px 12px',
                 cursor: 'pointer',
@@ -85,7 +85,7 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
         <button
           onClick={() => setShowShortcuts(!showShortcuts)}
           style={{
-            background: 'none', border: 'none', color: '#777',
+            background: 'none', border: 'none', color: '#666',
             padding: 4, cursor: 'pointer', display: 'flex',
             flexShrink: 0,
           }}
@@ -107,11 +107,11 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
           spellCheck={false}
           style={{
             flex: 1,
-            background: '#141414',
-            border: '1px solid #2a2a2a',
+            background: '#161616',
+            border: '1px solid #1a2a1a',
             borderRadius: 8,
             padding: '10px 14px',
-            color: '#f0f0f0',
+            color: '#e0e0e0',
             fontSize: 15,
             outline: 'none',
             minHeight: 42,
@@ -123,14 +123,14 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
           onClick={handleSubmit}
           disabled={!input.trim()}
           style={{
-            background: input.trim() ? '#6272a4' : '#2a2a2a',
+            background: input.trim() ? '#00aaff' : '#1a2a1a',
             border: 'none',
             borderRadius: 8,
             padding: '10px 14px',
             cursor: input.trim() ? 'pointer' : 'default',
             display: 'flex',
             alignItems: 'center',
-            color: '#0a0a0a',
+            color: '#0c0c0c',
             minHeight: 42,
             flexShrink: 0,
           }}
@@ -144,7 +144,7 @@ export const MobileBar: React.FC<MobileBarProps> = ({ onSend }) => {
         textAlign: 'center',
         padding: '2px 8px 6px',
         fontSize: 11,
-        color: '#777',
+        color: '#666',
       }}>
         Tip: Use your phone's voice keyboard 🎤
       </div>

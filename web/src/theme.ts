@@ -1,60 +1,33 @@
 /**
- * Theme constants — high-contrast geek theme.
- * Bright colors on pure black, maximum readability.
+ * Theme — Matrix hacker aesthetic.
+ * Deep black background, neon green accents, high contrast.
  */
 
 export const colors = {
-  // Backgrounds — pure black base
-  bg: '#0a0a0a',
-  bgDark: '#050505',
-  bgSurface: '#141414',
-  bgOverlay: 'rgba(0,0,0,0.7)',
+  // Backgrounds
+  bg: '#0c0c0c',
+  bgDark: '#060606',
+  bgSurface: '#161616',
+  bgOverlay: 'rgba(0,0,0,0.8)',
 
-  // Borders
-  border: '#2a2a2a',
-  borderHover: '#444',
+  // Borders — subtle green tint
+  border: '#1a2a1a',
+  borderHover: '#2a4a2a',
+  borderActive: '#00ff41',
 
-  // Text — high contrast
-  text: '#f0f0f0',
-  textSecondary: '#cccccc',
-  textMuted: '#777777',
+  // Text
+  text: '#e0e0e0',
+  textSecondary: '#aaaaaa',
+  textMuted: '#666666',
 
-  // Accent — vivid geek colors
-  green: '#50fa7b',
-  blue: '#6272a4',
-  red: '#ff5555',
-  yellow: '#f1fa8c',
-  magenta: '#ff79c6',
-  cyan: '#8be9fd',
-  orange: '#ffb86c',
-
-  // Selection
-  selection: '#264f2a',
-} as const;
-
-export const spacing = {
-  xs: 2,
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  xxl: 24,
-} as const;
-
-export const fontSize = {
-  xs: 11,
-  sm: 12,
-  md: 13,
-  lg: 14,
-  xl: 15,
-  xxl: 18,
-  mobile: { input: 15, terminal: 11, tab: 14 },
-  desktop: { input: 13, terminal: 13, tab: 13 },
-} as const;
-
-export const radii = {
-  sm: 3,
-  md: 6,
-  lg: 8,
-  xl: 12,
+  // Accents — neon
+  green: '#00ff41',        // Primary accent (Matrix green)
+  greenDim: '#00cc33',
+  greenBg: '#00ff4115',
+  red: '#ff3333',
+  redBg: '#ff333315',
+  yellow: '#ffff00',
+  blue: '#00aaff',
+  cyan: '#00ffff',
+  magenta: '#ff00ff',
 } as const;
