@@ -62,27 +62,26 @@ export default function App() {
   }, []);
 
   // Scrollback: clear terminal first, then write history (prevents duplication)
-  const writeScrollback = useCallback((id: string, data: string) => {
-    const el = document.querySelector(`[data-session-id="${id}"]`) as HTMLDivElement | null;
-    if (el && (el as any).__clearTerminal) {
-      (el as any).__clearTerminal();
-    }
-    if (el && (el as any).__writeToTerminal) {
-      (el as any).__writeToTerminal(data);
-    }
-  }, []);
+  // Track which sessions have already received scrollback (never replay twice)
+  const scrollbackReceivedRef = useRef<Set<string>>(new Set());
 
-  // ALL hooks must be called unconditionally (React rules of hooks)
+  const writeScrollbackOnce = useCallback((id: string, data: string) => {
+    // Only write scrollback ONCE per session per page load
+    if (scrollbackReceivedRef.current.has(id)) return;
+    scrollbackReceivedRef.current.add(id);
+    writeToTerminal(id, data);
+  }, [writeToTerminal]);
+
   const ws = useTerminalWS({
     onOutput: writeToTerminal,
-    onScrollback: writeScrollback,
+    onScrollback: writeScrollbackOnce,
     onExit: () => {},
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
       // Auto-attach new sessions — NO scrollback replay (prevents duplication)
       for (const s of newSessions) {
         if (!attachedRef.current.has(s.id)) {
-          ws.attachSession(s.id, false);  // replay=false
+          ws.attachSession(s.id);  // replay=false
           attachedRef.current.add(s.id);
         }
       }
@@ -103,7 +102,7 @@ export default function App() {
     if (ws.connected && sessions.length > 0) {
       for (const s of sessions) {
         if (!attachedRef.current.has(s.id)) {
-          ws.attachSession(s.id, true);  // replay=true on reconnect
+          ws.attachSession(s.id);  // replay=true on reconnect
           attachedRef.current.add(s.id);
         }
       }

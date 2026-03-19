@@ -51,7 +51,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       // Matrix hacker theme — green phosphor on deep black
       theme: {
         background: '#0c0c0c', foreground: '#e0e0e0', cursor: '#00ff41', cursorAccent: '#0c0c0c',
-        selectionBackground: '#00ff4140',  // Green tint, clearly visible on black
+        selectionBackground: '#005fff',     // Bright blue — unmissable on black
         selectionForeground: '#ffffff',
         black: '#0c0c0c',       red: '#ff3333',      green: '#00ff41',    yellow: '#ffff00',
         blue: '#00aaff',         magenta: '#ff00ff',  cyan: '#00ffff',     white: '#e0e0e0',
