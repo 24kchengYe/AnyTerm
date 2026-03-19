@@ -138,7 +138,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
                 autoFocus
               />
             ) : (
-              <span>{names[s.id] || `T${s.id.split('-')[0]}`}</span>
+              <span>{names[s.id] || s.title || `T${s.id.split('-')[0]}`}</span>
             )}
 
             {/* Close button (desktop only, not when editing) */}
