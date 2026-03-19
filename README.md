@@ -1,173 +1,155 @@
 # AnyTerm
 
-**Any device, any terminal** — Remote terminal manager with AI chat. Control your computer from your phone's browser.
+**Phone in hand, terminal at fingertips.** Run `anyterm` on your computer, open the URL on your phone — you're in.
+
+No apps to install. No remote desktop. No VPN. Just a browser.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Node.js-22+-339933?logo=node.js" alt="Node.js" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/xterm.js-5.5-000?logo=windowsterminal" alt="xterm.js" />
-  <img src="https://img.shields.io/badge/Claude_API-Sonnet-cc785c?logo=anthropic" alt="Claude" />
+  <img src="https://img.shields.io/badge/Whisper-STT-orange" alt="Whisper" />
 </p>
 
-## What is this?
+## Why AnyTerm?
 
-AnyTerm runs a lightweight web server on your computer. Open the URL from any device — phone, tablet, another PC — and you get:
+You're out. Your computer is home, running a long task. You want to check if it's done.
 
-- **Full terminal access** via xterm.js with WebGL acceleration
-- **Multiple terminal sessions** with tabs (create, switch, close)
-- **AI assistant** that converts natural language to shell commands (powered by Claude)
-- **Voice input** — talk to your terminal via local Whisper STT
-- **Session persistence** — disconnect and reconnect, your terminal output is still there
-- **Mobile-optimized** — touch shortcut bar (Tab, Ctrl+C, arrows), responsive layout, PWA
+| Without AnyTerm | With AnyTerm |
+|-----------------|--------------|
+| Open ToDesk → Wait for remote desktop to load → Navigate to terminal → Squint at tiny text | Open browser → `192.168.1.5:7860` → Done |
+
+**AnyTerm is not a remote desktop.** It's a lightweight terminal-over-browser that transmits only text — works on 4G, works on slow WiFi, works anywhere.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/24kchengYe/AnyTerm.git
 cd AnyTerm
-
-# Install dependencies
-cd server && npm install && cd ../web && npm install && cd ..
-
-# Start (both server + frontend dev mode)
-npm run dev
+npm run install:all
+anyterm
 ```
 
-Open `http://localhost:5173` in your browser. A terminal will auto-create.
+That's it. Browser opens automatically. Your phone can connect at the address shown in the console.
 
-### Enable AI Chat
+## Features
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-xxx npm run dev
-```
+### Core Terminal
+- **Real PowerShell** (or bash/zsh on Linux/Mac) — not a simulation
+- **Multiple tabs** — create, rename (double-click), close (with confirmation)
+- **Session persistence** — close browser, reopen, output is still there
+- **Export** — right-click tab → save terminal output as .txt
+- **Copy/paste** — Ctrl+C copies selection, Ctrl+V pastes
 
-### Enable Voice Input
+### Multi-Device
+- **Phone + Computer share the same terminal** — see exactly the same output
+- **Smart resize** — whichever device is actively typing controls the terminal width. Phone typing? 55 columns. Desktop typing? 120 columns. No conflict.
+- **Password login** — remote access requires password (set in `~/.anyterm_password`)
+- **Works over ZeroTier/Tailscale** — access from anywhere, not just local WiFi
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-xxx ANYTERM_WHISPER_MODEL=/path/to/ggml-base.bin npm run dev
-```
+### Mobile-Optimized
+- **Command input bar** — type commands with your phone keyboard, tap Send
+- **Shortcut keys** — Enter, Tab, Esc, Ctrl+C/D/Z/L, arrow keys — one tap
+- **11px font** — fits ~55 columns in portrait, ~90 in landscape
+- **Voice typing** — use your phone's native voice keyboard (no app needed)
 
-## Remote Access (Phone → PC)
+### Performance
+- **WebGL rendering** — GPU-accelerated terminal via xterm.js WebGL addon
+- **Flow control** — high/low watermark backpressure (100KB/10KB) prevents UI freeze
+- **Output batching** — 32ms frames (~30fps), reduces WebSocket message frequency
+- **Exponential backoff reconnect** — 2s → 30s max, prevents connection spam
 
-### Same WiFi
-Open `http://YOUR_PC_IP:7860` on your phone browser.
+### Security
+- **localhost bypass** — no password needed on your own computer
+- **Remote auth** — password required for phone/external access
+- **Persistent password** — saved to `~/.anyterm_password`, survives restarts
 
-### Remote (Tailscale / ZeroTier)
-1. Install [Tailscale](https://tailscale.com) on both devices
-2. Access via Tailscale IP: `http://100.x.x.x:7860`
+### Optional: AI Chat
+- Set `ANTHROPIC_API_KEY` to enable Claude-powered natural language → command conversion
+- All commands require manual confirmation (never auto-executes)
+- Dangerous command detection (rm, kill, sudo, etc.)
 
-### Remote (FRP / Cloudflare Tunnel)
-Forward port 7860 using your preferred tunneling tool.
+### Optional: Voice Input (Server-side)
+- Auto-detects local [whisper.cpp](https://github.com/ggerganov/whisper.cpp) installation
+- Phone records audio → sends to computer → Whisper transcribes → executes as command
 
 ## Architecture
 
 ```
-Browser (Phone/PC/Tablet)
-├── xterm.js terminals (WebGL accelerated)
-├── AI Chat panel (Claude API)
-├── Voice button (MediaRecorder → Whisper)
-└── Mobile shortcut bar (Tab, Ctrl+C, arrows...)
-     │
-     │  WebSocket
-     ▼
-AnyTerm Server (Node.js)
-├── Terminal Manager (node-pty + flow control)
-├── AI Engine (Claude API + terminal context)
-├── Speech Engine (local whisper.cpp + ffmpeg)
-└── Auth (token-based)
+┌─────────────────────────┐     ┌─────────────────────────┐
+│  Desktop Browser        │     │  Phone Browser           │
+│  xterm.js (13px, ~120c) │     │  xterm.js (11px, ~55c)   │
+│  Full terminal view     │     │  + Command input bar     │
+│  Ctrl+C/V/A shortcuts   │     │  + Shortcut buttons      │
+└──────────┬──────────────┘     └──────────┬──────────────┘
+           │   WebSocket                    │   WebSocket
+           └──────────┬────────────────────┘
+                      ▼
+         ┌────────────────────────┐
+         │   AnyTerm Server       │
+         │   Node.js + TypeScript │
+         ├────────────────────────┤
+         │ Terminal Manager       │ ← node-pty (ConPTY/PTY)
+         │ "Last active wins"     │ ← Smart multi-client resize
+         │ Auth (password-based)  │
+         │ AI Engine (optional)   │ ← Claude API
+         │ Whisper STT (optional) │ ← whisper.cpp + ffmpeg
+         └────────────────────────┘
 ```
 
-### Key Design Decisions
+### Multi-Device Resize Strategy
 
-| Decision | Choice | Why |
-|----------|--------|-----|
-| Backend | Node.js + TypeScript | node-pty is Node ecosystem; reuses patterns from [Zync](https://github.com/24kchengYe/Zync) |
-| Terminal | node-pty + xterm.js | Battle-tested combo, WebGL rendering, flow control |
-| AI | Claude API (not subprocess) | Fast (<2s vs 5-15s), lightweight, no hidden process |
-| Communication | WebSocket (JSON) | Real-time bidirectional, simpler than binary protocol for MVP |
-| Auth | Token on startup | Zero config, no database needed |
-| Voice | Local Whisper | Free, private, no cloud dependency |
+Existing tools handle this poorly:
+- **tmux**: Takes smallest screen — desktop gets shrunk
+- **ttyd**: Each client gets separate shell — not shared
+- **CSS scaling**: Text too small to read on phone
 
-### Flow Control (from Zync)
+**AnyTerm's approach**: "Last active client wins." The PTY resizes to match whichever device sent the most recent input. Since you don't type on phone and desktop simultaneously, there's no conflict.
 
-- **High watermark** (100KB): Pause PTY when renderer can't keep up
-- **Low watermark** (10KB): Resume when buffer drains
-- **Output batching** (32ms / ~30fps): Reduce IPC message frequency
-- **Safety valve** (5s): Auto-resume if acks stop arriving
-
-### Security
-
-- All AI-generated commands require user confirmation (no auto-execute)
-- Server-side dangerous command pattern detection as safety net
-- Rate limiting on chat WebSocket (30 msg/min)
-- Audit logging for all AI command executions
-- Token auth in production mode
-- Configurable CORS origin
-
-## Environment Variables
+## Configuration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ANTHROPIC_API_KEY` | Enable AI chat | _(disabled)_ |
-| `ANYTERM_WHISPER_MODEL` | Whisper GGML model path | _(disabled)_ |
-| `ANYTERM_WHISPER_EXE` | whisper-cli executable path | `whisper-cli` |
-| `ANYTERM_WHISPER_LANG` | Whisper language | `zh` |
-| `ANYTERM_FFMPEG_PATH` | FFmpeg path | _(auto-detected)_ |
 | `ANYTERM_PORT` | Server port | `7860` |
-| `ANYTERM_HOST` | Bind address | `0.0.0.0` |
-| `ANYTERM_AI_MODEL` | Claude model ID | `claude-sonnet-4-20250514` |
+| `ANYTERM_PASSWORD` | Override password (env var) | _(reads ~/.anyterm_password)_ |
+| `ANTHROPIC_API_KEY` | Enable AI chat | _(disabled)_ |
+| `ANYTERM_WHISPER_MODEL` | Whisper model path | _(auto-detected from D:/whisper/)_ |
 | `ANYTERM_CORS_ORIGIN` | CORS origin | `*` |
 
-## Production Build
+## Remote Access
 
-```bash
-cd web && npm run build && cd ..
-cd server && npm run build && cd ..
+### Same WiFi
+Phone browser → `http://YOUR_PC_IP:7860` → enter password.
 
-# Start production server (serves built frontend)
-NODE_ENV=production node server/dist/index.js
-```
+### ZeroTier (recommended for remote)
+1. Install [ZeroTier](https://www.zerotier.com/download/) on both devices
+2. Join same network → `http://ZEROTIER_IP:7860`
+3. Free, encrypted, peer-to-peer
 
-## Project Structure
+### Other options
+- **Tailscale** — works but slow in China (overseas relay)
+- **FRP** — needs a public server
+- **Phone hotspot** — simplest: phone shares network to PC, always works
 
-```
-anyterm/
-├── server/src/
-│   ├── index.ts              # HTTP + WS server entry
-│   ├── auth.ts               # Token authentication
-│   ├── terminal/
-│   │   ├── manager.ts        # Terminal lifecycle (create/destroy)
-│   │   ├── session.ts        # PTY wrapper + flow control + scrollback
-│   │   └── shell.ts          # Cross-platform shell detection
-│   ├── ai/
-│   │   └── engine.ts         # Claude API integration
-│   ├── speech/
-│   │   └── whisper.ts        # Local Whisper STT
-│   ├── ws/
-│   │   ├── terminal.ts       # Terminal WebSocket handler
-│   │   └── chat.ts           # AI chat WebSocket handler
-│   └── utils/
-│       └── proxy.ts          # System proxy auto-detection
-└── web/src/
-    ├── App.tsx               # Main layout
-    ├── components/
-    │   ├── Terminal.tsx       # xterm.js wrapper (WebGL, fit, ack)
-    │   ├── TerminalTabs.tsx   # Tab bar
-    │   ├── ChatPanel.tsx      # AI chat with command confirmation
-    │   ├── VoiceButton.tsx    # Voice recording
-    │   ├── MobileBar.tsx      # Touch shortcut keys
-    │   └── Settings.tsx       # Settings + remote access guide
-    └── hooks/
-        ├── useTerminalWS.ts   # Terminal WebSocket + reconnect
-        └── useChatWS.ts       # Chat WebSocket + reconnect
-```
+## Tech Stack
 
-## Related Projects
+- **Server**: Node.js + TypeScript + Express 5 + WebSocket
+- **Terminal**: [@lydell/node-pty](https://github.com/nicolo-ribaudo/node-pty-prebuilt) (ConPTY on Windows)
+- **Frontend**: React 19 + [xterm.js](https://xtermjs.org/) + WebGL addon + Vite
+- **AI**: [Anthropic Claude API](https://docs.anthropic.com/) (optional)
+- **STT**: [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (optional)
 
-- **[DigitalMe](https://github.com/24kchengYe/DigitalMe)** — Connect AI coding agents to chat platforms (Feishu, Telegram, etc.)
-- **[Zync](https://github.com/24kchengYe/Zync)** — Desktop IDE for AI agents (Electron + node-pty)
-- **[MidTerm](https://github.com/tlbx-ai/MidTerm)** — Browser-based tmux (C# + TypeScript, design inspiration)
+## Ecosystem
+
+AnyTerm is part of a trilogy for AI-augmented development:
+
+| Project | What it does |
+|---------|-------------|
+| **[AnyTerm](https://github.com/24kchengYe/AnyTerm)** | Phone → Browser → Terminal. Remote terminal for humans. |
+| **[DigitalMe](https://github.com/24kchengYe/DigitalMe)** | Chat app → AI Agent → Terminal. Remote terminal for AI agents via Feishu/Telegram. |
+| **[Zync](https://github.com/24kchengYe/Zync)** | Desktop IDE for managing multiple AI agent sessions in parallel. |
+
+> **AnyTerm for humans. DigitalMe for AI. Zync for orchestrating both.**
 
 ## License
 

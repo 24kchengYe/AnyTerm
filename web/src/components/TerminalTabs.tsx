@@ -85,13 +85,13 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
     <>
       <div ref={tabsContainerRef} role="tablist" style={{
         display: 'flex', alignItems: 'center', height: h,
-        background: '#13141c', borderBottom: '1px solid #292d3e',
+        background: '#050505', borderBottom: '1px solid #2a2a2a',
         padding: '0 4px', gap: mobile ? 4 : 2,
         overflowX: 'auto', flexShrink: 0,
       }}>
         {/* Connection status */}
         <div style={{ padding: '0 6px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          {connected ? <Wifi size={14} color="#9ece6a" /> : <WifiOff size={14} color="#f7768e" />}
+          {connected ? <Wifi size={14} color="#50fa7b" /> : <WifiOff size={14} color="#ff5555" />}
         </div>
 
         {/* Tabs */}
@@ -114,8 +114,8 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
               display: 'flex', alignItems: 'center', gap: 6,
               padding: mobile ? '6px 10px' : '4px 8px',
               borderRadius: 6, cursor: 'pointer',
-              background: s.id === activeId ? '#1f2335' : 'transparent',
-              color: s.id === activeId ? '#c0caf5' : '#565f89',
+              background: s.id === activeId ? '#141414' : 'transparent',
+              color: s.id === activeId ? '#f0f0f0' : '#777',
               fontSize, whiteSpace: 'nowrap', flexShrink: 0,
               minHeight: mobile ? 36 : 28,
               transition: 'background 0.15s',
@@ -132,8 +132,8 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
                 onKeyDown={(e) => { if (e.key === 'Enter') finishEdit(); if (e.key === 'Escape') setEditingId(null); }}
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                  background: '#292d3e', border: '1px solid #7aa2f7', borderRadius: 3,
-                  color: '#c0caf5', fontSize, padding: '1px 4px', width: 80, outline: 'none',
+                  background: '#2a2a2a', border: '1px solid #7aa2f7', borderRadius: 3,
+                  color: '#f0f0f0', fontSize, padding: '1px 4px', width: 80, outline: 'none',
                 }}
                 autoFocus
               />
@@ -162,7 +162,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
         {/* New terminal */}
         <button onClick={onCreate} title="New terminal"
           style={{
-            background: 'none', border: '1px solid #292d3e', color: '#565f89',
+            background: 'none', border: '1px solid #2a2a2a', color: '#777',
             cursor: 'pointer', padding: mobile ? '6px 12px' : '4px 8px',
             borderRadius: 6, display: 'flex', alignItems: 'center',
             fontSize, flexShrink: 0, minHeight: mobile ? 36 : 28,
@@ -175,7 +175,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
         {onSettings && (
           <button onClick={onSettings} title="Settings"
             style={{
-              background: 'none', border: 'none', color: '#565f89',
+              background: 'none', border: 'none', color: '#777',
               cursor: 'pointer', padding: 6, borderRadius: 4,
               display: 'flex', alignItems: 'center', flexShrink: 0,
             }}>
@@ -193,7 +193,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
               position: 'fixed',
               left: mobile ? 20 : menuPos.x,
               top: mobile ? h + 4 : menuPos.y,
-              background: '#1f2335', border: '1px solid #292d3e',
+              background: '#141414', border: '1px solid #2a2a2a',
               borderRadius: 8, padding: 4, minWidth: 160,
               boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
               zIndex: 1501,
@@ -201,7 +201,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
           >
             <MenuItem icon={<Edit3 size={14} />} label="Rename" onClick={() => startEdit(menuId)} />
             <MenuItem icon={<Download size={14} />} label="Export Output" onClick={() => { onExport(menuId); setMenuId(null); }} />
-            <div style={{ height: 1, background: '#292d3e', margin: '4px 0' }} />
+            <div style={{ height: 1, background: '#2a2a2a', margin: '4px 0' }} />
             <MenuItem icon={<X size={14} />} label="Close" danger onClick={() => { onClose(menuId); setMenuId(null); }} />
           </div>
         </div>
@@ -216,10 +216,10 @@ const MenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => 
     style={{
       display: 'flex', alignItems: 'center', gap: 8, width: '100%',
       padding: '8px 12px', background: 'none', border: 'none',
-      color: danger ? '#f7768e' : '#a9b1d6', fontSize: 13,
+      color: danger ? '#ff5555' : '#ccc', fontSize: 13,
       cursor: 'pointer', borderRadius: 4, textAlign: 'left',
     }}
-    onMouseOver={(e) => { e.currentTarget.style.background = '#292d3e'; }}
+    onMouseOver={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
     onMouseOut={(e) => { e.currentTarget.style.background = 'none'; }}
   >
     {icon}

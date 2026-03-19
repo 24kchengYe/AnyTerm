@@ -47,15 +47,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', width: '100vw', background: '#1a1b26',
+      height: '100vh', width: '100vw', background: '#0a0a0a',
     }}>
       <div style={{
-        background: '#1f2335', borderRadius: 12, border: '1px solid #292d3e',
+        background: '#141414', borderRadius: 12, border: '1px solid #2a2a2a',
         padding: 32, width: 320, maxWidth: '85vw', textAlign: 'center',
       }}>
-        <Lock size={32} color="#7aa2f7" style={{ marginBottom: 16 }} />
-        <h2 style={{ color: '#c0caf5', fontSize: 18, margin: '0 0 8px', fontWeight: 600 }}>AnyTerm</h2>
-        <p style={{ color: '#565f89', fontSize: 13, margin: '0 0 20px' }}>Enter password to access terminal</p>
+        <Lock size={32} color="#6272a4" style={{ marginBottom: 16 }} />
+        <h2 style={{ color: '#f0f0f0', fontSize: 18, margin: '0 0 8px', fontWeight: 600 }}>AnyTerm</h2>
+        <p style={{ color: '#777', fontSize: 13, margin: '0 0 20px' }}>Enter password to access terminal</p>
 
         <input
           ref={inputRef}
@@ -66,21 +66,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           placeholder="Password"
           style={{
             width: '100%', padding: '10px 14px', borderRadius: 8,
-            background: '#292d3e', border: '1px solid #3b4261',
-            color: '#c0caf5', fontSize: 15, outline: 'none',
+            background: '#2a2a2a', border: '1px solid #444',
+            color: '#f0f0f0', fontSize: 15, outline: 'none',
             textAlign: 'center', letterSpacing: 2,
           }}
         />
 
-        {error && <p style={{ color: '#f7768e', fontSize: 13, margin: '10px 0 0' }}>{error}</p>}
+        {error && <p style={{ color: '#ff5555', fontSize: 13, margin: '10px 0 0' }}>{error}</p>}
 
         <button
           onClick={handleSubmit}
           disabled={loading || !password.trim()}
           style={{
             width: '100%', padding: '10px', borderRadius: 8, marginTop: 14,
-            background: loading ? '#292d3e' : '#7aa2f7', border: 'none',
-            color: '#1a1b26', fontSize: 14, fontWeight: 600,
+            background: loading ? '#2a2a2a' : '#6272a4', border: 'none',
+            color: '#0a0a0a', fontSize: 14, fontWeight: 600,
             cursor: loading ? 'default' : 'pointer',
           }}
         >

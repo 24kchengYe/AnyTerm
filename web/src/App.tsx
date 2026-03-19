@@ -61,10 +61,21 @@ export default function App() {
     }
   }, []);
 
+  // Scrollback: clear terminal first, then write history (prevents duplication)
+  const writeScrollback = useCallback((id: string, data: string) => {
+    const el = document.querySelector(`[data-session-id="${id}"]`) as HTMLDivElement | null;
+    if (el && (el as any).__clearTerminal) {
+      (el as any).__clearTerminal();
+    }
+    if (el && (el as any).__writeToTerminal) {
+      (el as any).__writeToTerminal(data);
+    }
+  }, []);
+
   // ALL hooks must be called unconditionally (React rules of hooks)
   const ws = useTerminalWS({
     onOutput: writeToTerminal,
-    onScrollback: writeToTerminal,
+    onScrollback: writeScrollback,
     onExit: () => {},
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
@@ -166,7 +177,7 @@ export default function App() {
 
   // Auth gate: show login or loading BEFORE terminal UI
   if (authState === 'checking') {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1a1b26', color: '#565f89' }}>Loading...</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0a', color: '#777' }}>Loading...</div>;
   }
 
   if (authState === 'needsLogin') {
@@ -174,7 +185,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: '#1a1b26' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', background: '#0a0a0a' }}>
       <TerminalTabs
         sessions={sessions} activeId={activeId} connected={ws.connected} mobile={mobile} names={names}
         onSelect={(id) => { setActiveId(id); if (!attachedRef.current.has(id)) { ws.attachSession(id); attachedRef.current.add(id); } }}
@@ -184,7 +195,7 @@ export default function App() {
 
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {sessions.length === 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, color: '#565f89' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, color: '#777' }}>
             <div style={{ fontSize: 48 }}>{'>'}_</div>
             <div style={{ fontSize: 14 }}>{ws.connected ? 'Creating terminal...' : 'Connecting to server...'}</div>
           </div>
@@ -227,8 +238,8 @@ export default function App() {
           bottom: mobile ? 120 : 60,
           left: '50%',
           transform: 'translateX(-50%)',
-          background: '#9ece6a',
-          color: '#1a1b26',
+          background: '#50fa7b',
+          color: '#0a0a0a',
           padding: '8px 20px',
           borderRadius: 8,
           fontSize: 13,

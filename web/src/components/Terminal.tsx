@@ -48,13 +48,14 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     const terminal = new XTerm({
       fontSize: mobile ? 11 : 13,
       fontFamily: "Consolas, 'Cascadia Code', 'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
+      // High-contrast geek theme — bright colors on pure black
       theme: {
-        background: '#1a1b26', foreground: '#c0caf5', cursor: '#c0caf5', cursorAccent: '#1a1b26',
-        selectionBackground: '#33467c',
-        black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68',
-        blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6',
-        brightBlack: '#414868', brightRed: '#f7768e', brightGreen: '#9ece6a', brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7', brightMagenta: '#bb9af7', brightCyan: '#7dcfff', brightWhite: '#c0caf5',
+        background: '#0a0a0a', foreground: '#f0f0f0', cursor: '#00ff41', cursorAccent: '#0a0a0a',
+        selectionBackground: '#264f2a',
+        black: '#0a0a0a', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c',
+        blue: '#6272a4', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2',
+        brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5',
+        brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff',
       },
       scrollback: 5000,
       cursorBlink: true,
@@ -129,6 +130,11 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     const heartbeat = setInterval(flushAck, ACK_HEARTBEAT);
 
     const el = containerRef.current;
+    // Clear terminal (used before scrollback replay to prevent duplication)
+    (el as any).__clearTerminal = () => {
+      terminal.clear();
+    };
+
     (el as any).__writeToTerminal = (data: string) => {
       pendingAckBytes += data.length;
       if (pendingAckBytes >= ACK_BATCH_SIZE) flushAck();
@@ -181,6 +187,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       inputDisposable.dispose();
       el.removeEventListener('paste', handlePaste);
       (el as any).__writeToTerminal = undefined;
+      (el as any).__clearTerminal = undefined;
       (el as any).__getBuffer = undefined;
       terminal.dispose();
       fitAddon.dispose();
