@@ -15,6 +15,12 @@ No apps to install. No remote desktop. No VPN. Just a browser.
   <img src="https://img.shields.io/badge/Whisper-STT-orange" alt="Whisper" />
 </p>
 
+### Screenshots
+
+| Desktop | Mobile |
+|---------|--------|
+| <img src="docs/demo/computer.png" width="500" /> | <img src="docs/demo/phone.jpg" width="250" /> |
+
 ## Why AnyTerm?
 
 You're out. Your computer is home, running a long task. You want to check if it's done.
