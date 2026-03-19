@@ -22,13 +22,17 @@ export function getDefaultShell(): ShellInfo {
 }
 
 function detectWindowsShell(): ShellInfo {
-  // PowerShell Core (pwsh) first — modern, cross-platform
+  // PowerShell Core (pwsh) first — modern, cross-platform, UTF-8 by default
   const pwsh = findExecutable('pwsh.exe');
   if (pwsh) return { path: pwsh, name: 'pwsh', args: ['-NoExit', '-NoLogo'] };
 
-  // Windows PowerShell — like Windows Terminal default
+  // Windows PowerShell — use -NoExit -Command to set UTF-8 before interactive prompt
   const powershell = findExecutable('powershell.exe');
-  if (powershell) return { path: powershell, name: 'powershell', args: ['-NoExit', '-NoLogo'] };
+  if (powershell) return {
+    path: powershell, name: 'powershell',
+    args: ['-NoExit', '-NoLogo', '-Command',
+      '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;[Console]::InputEncoding=[System.Text.Encoding]::UTF8'],
+  };
 
   // Git Bash fallback
   const gitBash = findGitBash();

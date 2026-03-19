@@ -68,7 +68,9 @@ export class TerminalSession extends EventEmitter {
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         FORCE_COLOR: '3',
-        LANG: process.env.LANG || 'en_US.UTF-8',
+        LANG: process.env.LANG || 'zh_CN.UTF-8',
+        // Windows: ensure UTF-8 code page for Chinese support
+        PYTHONIOENCODING: 'utf-8',
       } as Record<string, string>,
     });
 
