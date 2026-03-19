@@ -5,6 +5,10 @@
 No apps to install. No remote desktop. No VPN. Just a browser.
 
 <p align="center">
+  <img src="docs/demo/hero-banner.png" alt="AnyTerm — Desktop and Mobile terminal sharing" width="800" />
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Node.js-22+-339933?logo=node.js" alt="Node.js" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/xterm.js-5.5-000?logo=windowsterminal" alt="xterm.js" />
