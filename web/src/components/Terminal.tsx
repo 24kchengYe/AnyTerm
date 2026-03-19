@@ -138,10 +138,28 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       terminal.clear();
     };
 
+    // Track alternate screen state to clean up scrollback on exit
+    let inAlternateScreen = false;
+
     (el as any).__writeToTerminal = (data: string) => {
       pendingAckBytes += data.length;
       if (pendingAckBytes >= ACK_BATCH_SIZE) flushAck();
       else if (!ackTimer) ackTimer = setTimeout(flushAck, ACK_BATCH_INTERVAL);
+
+      // Detect alternate screen enter/exit (used by Claude Code, vim, top, etc.)
+      // \x1b[?1049h = enter, \x1b[?1049l = exit
+      // \x1b[?47h / \x1b[?47l = older variant
+      if (data.includes('\x1b[?1049h') || data.includes('\x1b[?47h')) {
+        inAlternateScreen = true;
+      }
+      if (data.includes('\x1b[?1049l') || data.includes('\x1b[?47l')) {
+        if (inAlternateScreen) {
+          inAlternateScreen = false;
+          // Clear the "ghost frame" that got pushed into scrollback when exiting alt screen
+          terminal.clear();
+        }
+      }
+
       terminal.write(data);
     };
 
