@@ -137,7 +137,7 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
     connected,
     reconnect,
     createSession: useCallback((cwd?: string, cols?: number, rows?: number) => send({ type: 'create', cwd, cols, rows }), [send]),
-    attachSession: useCallback((id: string) => send({ type: 'attach', id }), [send]),
+    attachSession: useCallback((id: string, replay = true) => send({ type: 'attach', id, replay }), [send]),
     writeInput: useCallback((id: string, data: string) => send({ type: 'input', id, data }), [send]),
     resizeTerminal: useCallback((id: string, cols: number, rows: number) => send({ type: 'resize', id, cols, rows }), [send]),
     ackBytes: useCallback((id: string, bytes: number) => send({ type: 'ack', id, bytes }), [send]),

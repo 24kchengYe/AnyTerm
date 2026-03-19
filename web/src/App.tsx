@@ -79,10 +79,10 @@ export default function App() {
     onExit: () => {},
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
-      // Auto-attach any new sessions (e.g., created from another device)
+      // Auto-attach new sessions — NO scrollback replay (prevents duplication)
       for (const s of newSessions) {
         if (!attachedRef.current.has(s.id)) {
-          ws.attachSession(s.id);
+          ws.attachSession(s.id, false);  // replay=false
           attachedRef.current.add(s.id);
         }
       }
@@ -103,7 +103,7 @@ export default function App() {
     if (ws.connected && sessions.length > 0) {
       for (const s of sessions) {
         if (!attachedRef.current.has(s.id)) {
-          ws.attachSession(s.id);
+          ws.attachSession(s.id, true);  // replay=true on reconnect
           attachedRef.current.add(s.id);
         }
       }

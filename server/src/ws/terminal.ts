@@ -105,16 +105,20 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
 
           case 'attach': {
             if (typeof msg.id !== 'string') break;
-            if (subscriptions.has(msg.id)) break;
+            if (subscriptions.has(msg.id)) break; // Already subscribed
             const session = manager.get(msg.id);
             if (!session) {
               safeSend(ws, { type: 'error', message: `Session ${msg.id} not found` });
               break;
             }
             subscribe(session);
-            const scrollback = session.getRecentOutput(50000);
-            if (scrollback) {
-              safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
+            // Only send scrollback if client explicitly requests it (first attach)
+            // msg.replay defaults to true for backward compat
+            if (msg.replay !== false) {
+              const scrollback = session.getRecentOutput(50000);
+              if (scrollback) {
+                safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
+              }
             }
             break;
           }
