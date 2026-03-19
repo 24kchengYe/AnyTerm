@@ -105,21 +105,16 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
 
           case 'attach': {
             if (typeof msg.id !== 'string') break;
-            if (subscriptions.has(msg.id)) break; // Already subscribed
+            if (subscriptions.has(msg.id)) break;
             const session = manager.get(msg.id);
             if (!session) {
               safeSend(ws, { type: 'error', message: `Session ${msg.id} not found` });
               break;
             }
             subscribe(session);
-            // Only send scrollback if client explicitly requests it (first attach)
-            // msg.replay defaults to true for backward compat
-            if (msg.replay !== false) {
-              const scrollback = session.getRecentOutput(50000);
-              if (scrollback) {
-                safeSend(ws, { type: 'scrollback', id: msg.id, data: scrollback });
-              }
-            }
+            // No scrollback replay — same as ttyd/gotty.
+            // Clients only see output generated AFTER they connect.
+            // xterm.js has its own 5000-line scrollback for current session.
             break;
           }
 

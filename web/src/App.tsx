@@ -62,19 +62,11 @@ export default function App() {
   }, []);
 
   // Scrollback: clear terminal first, then write history (prevents duplication)
-  // Track which sessions have already received scrollback (never replay twice)
-  const scrollbackReceivedRef = useRef<Set<string>>(new Set());
-
-  const writeScrollbackOnce = useCallback((id: string, data: string) => {
-    // Only write scrollback ONCE per session per page load
-    if (scrollbackReceivedRef.current.has(id)) return;
-    scrollbackReceivedRef.current.add(id);
-    writeToTerminal(id, data);
-  }, [writeToTerminal]);
-
+  // No scrollback replay — same approach as ttyd/gotty.
+  // Clients only see output after they connect. xterm.js keeps its own 5000-line buffer.
   const ws = useTerminalWS({
     onOutput: writeToTerminal,
-    onScrollback: writeScrollbackOnce,
+    onScrollback: () => {},  // Ignored — server no longer sends scrollback
     onExit: () => {},
     onSessionsUpdate: (newSessions) => {
       setSessions(newSessions);
