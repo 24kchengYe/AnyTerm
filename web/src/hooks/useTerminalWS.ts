@@ -142,5 +142,6 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
     resizeTerminal: useCallback((id: string, cols: number, rows: number) => send({ type: 'resize', id, cols, rows }), [send]),
     ackBytes: useCallback((id: string, bytes: number) => send({ type: 'ack', id, bytes }), [send]),
     destroySession: useCallback((id: string) => send({ type: 'destroy', id }), [send]),
+    renameSession: useCallback((id: string, title: string) => send({ type: 'rename', id, title }), [send]),
   };
 }

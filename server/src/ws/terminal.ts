@@ -135,6 +135,16 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             break;
           }
 
+          case 'rename': {
+            if (typeof msg.id !== 'string' || typeof msg.title !== 'string') break;
+            const session = manager.get(msg.id);
+            if (session) {
+              session.setTitle(msg.title.slice(0, 50)); // Max 50 chars
+              broadcastSessions(wss, manager); // Sync to all clients
+            }
+            break;
+          }
+
           case 'resize': {
             if (typeof msg.id !== 'string') break;
             const cols = typeof msg.cols === 'number' ? msg.cols : 0;

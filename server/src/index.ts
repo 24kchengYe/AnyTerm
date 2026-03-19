@@ -180,7 +180,10 @@ server.on('upgrade', (req, socket, head) => {
   const remoteAddr = req.socket.remoteAddress || '';
   const isLocalhost = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
   if (!isLocalhost && !validateRequest(req)) {
-    console.log(`[Auth] Blocked remote WebSocket from ${remoteAddr} (no valid token)`);
+    // Don't spam logs — only log terminal WS blocks, not chat (which auto-reconnects)
+    if (pathname === '/ws/terminal') {
+      console.log(`[Auth] Blocked remote connection from ${remoteAddr} (no valid token)`);
+    }
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;

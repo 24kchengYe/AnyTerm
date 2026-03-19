@@ -21,7 +21,9 @@ export default function App() {
   const [chatExpanded, setChatExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobile, setMobile] = useState(isMobile());
-  const [names, setNames] = useState<Record<string, string>>({});
+  // Names come from server (session.title) — derived from sessions list
+  const names: Record<string, string> = {};
+  for (const s of sessions) { names[s.id] = s.title; }
   const [closeConfirm, setCloseConfirm] = useState<string | null>(null);
   const [whisperAvailable, setWhisperAvailable] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -120,7 +122,6 @@ export default function App() {
     setCloseConfirm(null);
     ws.destroySession(id);
     attachedRef.current.delete(id);
-    setNames(prev => { const n = { ...prev }; delete n[id]; return n; });
     setActiveId(prev => {
       if (prev !== id) return prev;
       const remaining = sessions.filter(s => s.id !== id);
@@ -129,8 +130,8 @@ export default function App() {
   }, [ws, sessions, closeConfirm]);
 
   const handleRename = useCallback((id: string, newName: string) => {
-    setNames(prev => ({ ...prev, [id]: newName }));
-  }, []);
+    ws.renameSession(id, newName); // Send to server → broadcasts to all clients
+  }, [ws]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);

@@ -49,6 +49,7 @@ export class TerminalSession extends EventEmitter {
   constructor(id: string, cwd?: string, cols = 120, rows = 30) {
     super();
     this.id = id;
+    this.title = `Terminal ${id.split('-')[0]}`;
     // Validate dimensions
     this.cols = Math.max(20, Math.min(500, cols));
     this.rows = Math.max(5, Math.min(200, rows));
@@ -177,10 +178,16 @@ export class TerminalSession extends EventEmitter {
     this.ptyProcess.resize(cols, rows);
   }
 
+  private title: string;
+
+  setTitle(title: string): void {
+    this.title = title;
+  }
+
   getInfo(): TerminalSessionInfo {
     return {
       id: this.id,
-      title: `Terminal ${this.id}`,
+      title: this.title,
       cwd: this.cwd,
       shell: this.shell,
       cols: this.cols,
