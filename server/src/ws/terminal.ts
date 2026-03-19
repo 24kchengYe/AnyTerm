@@ -149,7 +149,10 @@ export function setupTerminalWS(wss: WebSocketServer, manager: TerminalManager):
             if (typeof msg.id !== 'string') break;
             const cols = typeof msg.cols === 'number' ? msg.cols : 0;
             const rows = typeof msg.rows === 'number' ? msg.rows : 0;
-            if (cols < 20 || rows < 5 || cols > 500 || rows > 200) break;
+            if (cols < 20 || rows < 5 || cols > 500 || rows > 200) {
+              // Invalid dimensions — ignore silently (normal during mobile keyboard open/close)
+              break;
+            }
 
             // Store this client's viewport
             if (!clientViewports.has(msg.id)) clientViewports.set(msg.id, new Map());

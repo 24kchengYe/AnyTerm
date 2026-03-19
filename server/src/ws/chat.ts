@@ -79,6 +79,12 @@ export function setupChatWS(
               break;
             }
 
+            // If a command is pending confirmation, auto-reject it first
+            if (pendingCommand) {
+              console.log(`[AI:Audit] Auto-rejected pending: ${pendingCommand.command}`);
+              pendingCommand = null;
+            }
+
             safeSend(ws, { type: 'thinking' });
 
             const result = await aiEngine.process(msg.text, msg.targetTerminal);

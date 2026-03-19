@@ -28,6 +28,7 @@ export interface TerminalSessionInfo {
 
 export class TerminalSession extends EventEmitter {
   readonly id: string;
+  private title: string;
   private ptyProcess: pty.IPty;
   private scrollbackBuffer = '';
   private cwd: string;
@@ -177,8 +178,6 @@ export class TerminalSession extends EventEmitter {
     this.rows = rows;
     this.ptyProcess.resize(cols, rows);
   }
-
-  private title: string;
 
   setTitle(title: string): void {
     this.title = title;

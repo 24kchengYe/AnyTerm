@@ -4,6 +4,7 @@
  */
 import { execFile, execSync } from 'child_process';
 import { writeFile, unlink, mkdtemp } from 'fs/promises';
+import { existsSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 
@@ -29,12 +30,10 @@ export class LocalWhisper {
     this.ffmpegPath = opts.ffmpegPath || null;
     this.language = opts.language || '';
 
-    // Validate model path at init time
-    import('fs').then(fs => {
-      if (!fs.existsSync(this.modelPath)) {
-        console.warn(`[Whisper] Model file not found: ${this.modelPath}`);
-      }
-    });
+    // Validate model path at init time (sync, blocks constructor)
+    if (!existsSync(this.modelPath)) {
+      console.warn(`[Whisper] WARNING: Model file not found: ${this.modelPath}`);
+    }
   }
 
   async transcribe(audioBuffer: Buffer, format: string): Promise<STTResult> {
