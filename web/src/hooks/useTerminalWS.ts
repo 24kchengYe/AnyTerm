@@ -113,12 +113,12 @@ export function useTerminalWS(options: UseTerminalWSOptions) {
   useEffect(() => {
     connect();
 
-    // Poll session list every 5s as fallback (ensures sync even if broadcast missed)
+    // Poll session list every 8s as fallback (ensures sync even if broadcast missed)
     const pollInterval = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'list' }));
       }
-    }, 5000);
+    }, 8000);
 
     return () => {
       clearInterval(pollInterval);
