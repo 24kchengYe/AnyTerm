@@ -212,7 +212,11 @@ export default function App() {
       </div>
 
       {mobile && activeId && (
-        <MobileBar onSend={handleInput} />
+        <MobileBar onSend={handleInput} getBuffer={() => {
+          if (!activeId) return '';
+          const el = document.querySelector(`[data-session-id="${activeId}"]`) as HTMLDivElement | null;
+          return el && (el as any).__getBuffer ? (el as any).__getBuffer() : '';
+        }} />
       )}
 
       {chatExpanded && (
