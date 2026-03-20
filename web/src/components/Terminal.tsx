@@ -140,18 +140,6 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     // Track alternate screen state to clean up scrollback on exit
     let inAlternateScreen = false;
-    // Track if user is scrolled up (reading history) — don't auto-scroll if so
-    let userScrolledUp = false;
-
-    // Detect when user scrolls away from bottom
-    const viewportEl = containerRef.current?.querySelector('.xterm-viewport');
-    const handleScroll = () => {
-      if (!viewportEl) return;
-      const { scrollTop, scrollHeight, clientHeight } = viewportEl;
-      // "At bottom" means within 5px of the end
-      userScrolledUp = (scrollHeight - scrollTop - clientHeight) > 5;
-    };
-    viewportEl?.addEventListener('scroll', handleScroll);
 
     (el as any).__writeToTerminal = (data: string) => {
       pendingAckBytes += data.length;
@@ -169,14 +157,19 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
         }
       }
 
-      // Save scroll position before write
-      const wasScrolledUp = userScrolledUp;
-      const savedScrollTop = viewportEl?.scrollTop ?? 0;
+      // Preserve scroll position if user is reading history
+      const vp = el.querySelector('.xterm-viewport') as HTMLElement | null;
+      let savedPos = -1;
+      if (vp) {
+        const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
+        if (gap > 10) { // User is scrolled up (not at bottom)
+          savedPos = vp.scrollTop;
+        }
+      }
 
       terminal.write(data, () => {
-        // After write callback: restore scroll if user was reading history
-        if (wasScrolledUp && viewportEl) {
-          viewportEl.scrollTop = savedScrollTop;
+        if (savedPos >= 0 && vp) {
+          vp.scrollTop = savedPos;
         }
       });
     };
@@ -225,7 +218,6 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       resizeObserver.disconnect();
       inputDisposable.dispose();
       el.removeEventListener('paste', handlePaste);
-      viewportEl?.removeEventListener('scroll', handleScroll);
       (el as any).__writeToTerminal = undefined;
       (el as any).__clearTerminal = undefined;
       (el as any).__getBuffer = undefined;
