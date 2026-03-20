@@ -140,27 +140,45 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
 
     // Track alternate screen state to clean up scrollback on exit
     let inAlternateScreen = false;
+    // Track if user is scrolled up (reading history) — don't auto-scroll if so
+    let userScrolledUp = false;
+
+    // Detect when user scrolls away from bottom
+    const viewportEl = containerRef.current?.querySelector('.xterm-viewport');
+    const handleScroll = () => {
+      if (!viewportEl) return;
+      const { scrollTop, scrollHeight, clientHeight } = viewportEl;
+      // "At bottom" means within 5px of the end
+      userScrolledUp = (scrollHeight - scrollTop - clientHeight) > 5;
+    };
+    viewportEl?.addEventListener('scroll', handleScroll);
 
     (el as any).__writeToTerminal = (data: string) => {
       pendingAckBytes += data.length;
       if (pendingAckBytes >= ACK_BATCH_SIZE) flushAck();
       else if (!ackTimer) ackTimer = setTimeout(flushAck, ACK_BATCH_INTERVAL);
 
-      // Detect alternate screen enter/exit (used by Claude Code, vim, top, etc.)
-      // \x1b[?1049h = enter, \x1b[?1049l = exit
-      // \x1b[?47h / \x1b[?47l = older variant
+      // Detect alternate screen enter/exit
       if (data.includes('\x1b[?1049h') || data.includes('\x1b[?47h')) {
         inAlternateScreen = true;
       }
       if (data.includes('\x1b[?1049l') || data.includes('\x1b[?47l')) {
         if (inAlternateScreen) {
           inAlternateScreen = false;
-          // Clear the "ghost frame" that got pushed into scrollback when exiting alt screen
           terminal.clear();
         }
       }
 
-      terminal.write(data);
+      // Save scroll position before write
+      const wasScrolledUp = userScrolledUp;
+      const savedScrollTop = viewportEl?.scrollTop ?? 0;
+
+      terminal.write(data, () => {
+        // After write callback: restore scroll if user was reading history
+        if (wasScrolledUp && viewportEl) {
+          viewportEl.scrollTop = savedScrollTop;
+        }
+      });
     };
 
     (el as any).__getBuffer = (): string => {
@@ -207,6 +225,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       resizeObserver.disconnect();
       inputDisposable.dispose();
       el.removeEventListener('paste', handlePaste);
+      viewportEl?.removeEventListener('scroll', handleScroll);
       (el as any).__writeToTerminal = undefined;
       (el as any).__clearTerminal = undefined;
       (el as any).__getBuffer = undefined;
