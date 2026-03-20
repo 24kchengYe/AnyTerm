@@ -62,6 +62,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       cursorBlink: true,
       cursorStyle: 'bar',
       allowTransparency: false,
+      scrollOnUserInput: false,  // Never auto-scroll — user controls scroll position
     });
 
     const fitAddon = new FitAddon();
@@ -157,23 +158,7 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
         }
       }
 
-      // Preserve scroll position if user is reading history
-      // Use xterm buffer API: viewportY < baseY means user scrolled up
-      const scrolledUp = terminal.buffer.active.viewportY < terminal.buffer.active.baseY;
-      const savedLine = scrolledUp ? terminal.buffer.active.viewportY : -1;
-
       terminal.write(data);
-
-      // Restore after write + DOM update (xterm uses rAF internally)
-      if (savedLine >= 0) {
-        // Must fight xterm's auto-scroll with multiple attempts
-        const restore = () => terminal.scrollToLine(savedLine);
-        restore();
-        requestAnimationFrame(() => {
-          restore();
-          requestAnimationFrame(restore);
-        });
-      }
     };
 
     (el as any).__getBuffer = (): string => {
