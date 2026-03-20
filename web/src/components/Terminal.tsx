@@ -217,14 +217,25 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
     };
   }, [sessionId]);
 
-  // Re-fit on becoming active
+  // Re-fit on becoming active — must wait for display:none→flex reflow
   useEffect(() => {
     if (isActive && fitAddonRef.current && xtermRef.current) {
-      requestAnimationFrame(() => {
-        fitAddonRef.current?.fit();
-        xtermRef.current?.focus();
-        const dims = fitAddonRef.current?.proposeDimensions();
+      // Triple rAF + timeout ensures DOM has reflowed after display change
+      const fit = () => {
+        if (!fitAddonRef.current || !xtermRef.current) return;
+        fitAddonRef.current.fit();
+        // Force full viewport refresh — fixes scroll and rendering after display:none
+        xtermRef.current.refresh(0, xtermRef.current.rows - 1);
+        xtermRef.current.scrollToBottom();
+        xtermRef.current.focus();
+        const dims = fitAddonRef.current.proposeDimensions();
         if (dims) onResize(dims.cols, dims.rows);
+      };
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fit();
+          setTimeout(fit, 100); // Safety: some browsers need extra time after display change
+        });
       });
     }
   }, [isActive, onResize]);
