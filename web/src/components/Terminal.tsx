@@ -158,20 +158,22 @@ export const TerminalView: React.FC<TerminalProps> = React.memo(({
       }
 
       // Preserve scroll position if user is reading history
-      const vp = el.querySelector('.xterm-viewport') as HTMLElement | null;
-      let savedPos = -1;
-      if (vp) {
-        const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
-        if (gap > 10) { // User is scrolled up (not at bottom)
-          savedPos = vp.scrollTop;
-        }
-      }
+      // Use xterm buffer API: viewportY < baseY means user scrolled up
+      const scrolledUp = terminal.buffer.active.viewportY < terminal.buffer.active.baseY;
+      const savedLine = scrolledUp ? terminal.buffer.active.viewportY : -1;
 
-      terminal.write(data, () => {
-        if (savedPos >= 0 && vp) {
-          vp.scrollTop = savedPos;
-        }
-      });
+      terminal.write(data);
+
+      // Restore after write + DOM update (xterm uses rAF internally)
+      if (savedLine >= 0) {
+        // Must fight xterm's auto-scroll with multiple attempts
+        const restore = () => terminal.scrollToLine(savedLine);
+        restore();
+        requestAnimationFrame(() => {
+          restore();
+          requestAnimationFrame(restore);
+        });
+      }
     };
 
     (el as any).__getBuffer = (): string => {
