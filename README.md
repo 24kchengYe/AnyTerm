@@ -175,4 +175,4 @@ MIT
 
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=24kchengYe.AnyTerm)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=24kchengYe/AnyTerm&type=Date)](https://star-history.com/#24kchengYe/AnyTerm&Date)
+[![Star History](https://starchart.cc/24kchengYe/AnyTerm.svg)](https://starchart.cc/24kchengYe/AnyTerm)
